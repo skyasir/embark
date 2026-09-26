@@ -897,6 +897,13 @@ SIDEBAR_ITEMS = [
 		"link_to": "Embark Question",
 		"icon": "message-square",
 	},
+	{"label": "Studio", "link_type": "Page", "link_to": "embark-studio", "icon": "code"},
+	{
+		"label": "Change Sets",
+		"link_type": "DocType",
+		"link_to": "Embark Change Set",
+		"icon": "history",
+	},
 ]
 
 
