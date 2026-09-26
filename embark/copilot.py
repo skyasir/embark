@@ -299,6 +299,25 @@ def _last_field(meta) -> str | None:
 	return fields[-1] if fields else None
 
 
+def add_change(pending: list[dict], change) -> str:
+	"""Put a builder's change into the set being composed, once.
+
+	A model that repeats itself — and a small one will, several times in a row
+	— must not compose the same field seven times: the first would apply and
+	the rest would fail on it.
+	"""
+	changes = change if isinstance(change, list) else [change]
+	added, seen = [], {(c["ref_doctype"], c.get("ref_name"), c.get("payload")) for c in pending}
+	for c in changes:
+		key = (c["ref_doctype"], c.get("ref_name"), c.get("payload"))
+		if key in seen:
+			continue
+		seen.add(key)
+		pending.append(c)
+		added.append(c["summary"])
+	return "; ".join(added) or _("Already in this change set.")
+
+
 @frappe.whitelist()
 def propose(title: str, request: str = "", changes: str | list | None = None) -> dict:
 	"""Write a change set down. Nothing happens to the site until it is applied."""

@@ -1,17 +1,17 @@
-"""Embark's copilot, run on Frappe Flow's engine when the site has it.
+"""Embark's copilot, run on Frappe Flow's engine — carried inside Embark.
 
-Flow is Frappe's own agent app: it manages providers and models, runs the
-tool-calling loop, and keeps sessions. Where it is installed there is no reason
-for Embark to run a second loop of its own — so it hands Flow the same
-builders, and Flow drives them.
+Flow's agent loop, model resolver and tool decorator are vendored under
+``embark/vendor/flow`` (see the note there), so this needs no second app
+installed beside Embark. Providers and models are Embark's own records,
+Embark AI Provider and Embark AI Model.
 
-What does *not* change is the safety: Flow's tools here only compose changes.
+What does not change is the safety: the tools here only compose changes.
 Nothing touches the site until the change set is applied, and it can still be
-undone in one go. Embark never gives Flow its own write tools, which can create
-and delete records outright.
+undone in one go. The engine is never handed write tools of its own.
 
-On a site without Flow, ``copilot_chat`` runs its own loop instead, and the two
-behave the same from the panel.
+Embark keeps its own simpler loop too, in ``copilot_chat``. This one is chosen
+with ``"embark_engine": "flow"`` in site config, because the two suit different
+models — see ``available()``.
 """
 
 from __future__ import annotations
@@ -24,33 +24,31 @@ from embark.copilot_chat import MAX_ROUNDS, SYSTEM_PROMPT, _title
 
 
 def available() -> bool:
-	"""Flow installed, switched on for Embark, and a model for it to use.
+	"""Switched on for this site, with a model for it to use.
 
-	It is opt-in rather than automatic. Flow's loop is stricter than ours: it
-	validates every tool argument and has no patience for a model that answers
-	sloppily, so on a small local model it circles where ours gets there. With
+	It is opt-in rather than automatic. This engine validates every tool
+	argument strictly and has no patience for a model that answers sloppily, so
+	on a small local model it circles where Embark's own loop gets there. With
 	a capable model it is the better engine, so this is a switch, not a rule:
 
 	    "embark_engine": "flow"     # in site config
 	"""
 	if frappe.conf.get("embark_engine") != "flow":
 		return False
-	if "flow" not in frappe.get_installed_apps():
-		return False
 	return bool(model_name())
 
 
 def model_name() -> str | None:
-	"""The Flow Model to run on: the one named in site config, else any enabled one."""
-	wanted = frappe.conf.get("embark_flow_model")
-	if wanted and frappe.db.exists("Flow Model", wanted):
+	"""The model to run on: the one named in site config, else any enabled one."""
+	wanted = frappe.conf.get("embark_ai_model")
+	if wanted and frappe.db.exists("Embark AI Model", wanted):
 		return wanted
-	return frappe.db.get_value("Flow Model", {"enabled": 1}, "name", order_by="modified desc")
+	return frappe.db.get_value("Embark AI Model", {"enabled": 1}, "name", order_by="modified desc")
 
 
 def chat(message: str, history: list[dict] | None = None) -> dict:
 	"""One turn, run by Flow, composing a change set the consultant applies."""
-	from flow import Agent, tool
+	from embark.vendor.flow import Agent, tool
 
 	pending: list[dict] = []
 
@@ -145,13 +143,11 @@ def chat(message: str, history: list[dict] | None = None) -> dict:
 
 def _compose(pending: list[dict], change) -> str:
 	"""A builder's changes join the set being composed; its summary goes back."""
-	changes = change if isinstance(change, list) else [change]
-	pending.extend(changes)
-	return "; ".join(c["summary"] for c in changes)
+	return copilot.add_change(pending, change)
 
 
 def _steps(result) -> list[dict]:
-	"""Flow's tool calls, in the shape the panel already draws."""
+	"""The engine's tool calls, in the shape the panel already draws."""
 	steps = []
 	if result is None:
 		return steps

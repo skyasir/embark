@@ -168,7 +168,7 @@ def status() -> dict:
 	from embark import copilot_flow
 
 	if copilot_flow.available():
-		return {"on": True, "provider": "Frappe Flow", "model": copilot_flow.model_name()}
+		return {"on": True, "provider": "Flow engine", "model": copilot_flow.model_name()}
 
 	settings = config()
 	return {
@@ -383,10 +383,8 @@ def _run_tool(name: str, arguments: dict, pending: list[dict], request: str):
 		return {"error": str(e)}, None
 
 	# A workflow needs its states and actions to exist first, so a builder may
-	# hand back several changes at once.
-	changes = change if isinstance(change, list) else [change]
-	pending.extend(changes)
-	return {"added": [c["summary"] for c in changes]}, None
+	# hand back several changes at once — and a repeat is dropped.
+	return {"added": copilot.add_change(pending, change)}, None
 
 
 def _describe(doctype: str) -> dict:

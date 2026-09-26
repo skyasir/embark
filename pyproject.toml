@@ -7,9 +7,12 @@ description = "Package-based data readiness for fast-track standard ERPNext impl
 # v15 benches run Python 3.10/3.11.
 requires-python = ">=3.10"
 readme = "README.md"
+license = "AGPL-3.0-or-later"
 dynamic = ["version"]
 dependencies = [
     # frappe and erpnext are installed and managed by bench, not pip.
+    # The vendored engine talks to every provider through litellm.
+    "litellm>=1.83.0,<1.84",
 ]
 
 [build-system]
@@ -26,6 +29,8 @@ erpnext = ">=15.0.0,<17.0.0"
 packages = []
 
 [tool.ruff]
+# Vendored code is left exactly as it came, so it can be diffed upstream.
+extend-exclude = ["embark/vendor"]
 line-length = 110
 target-version = "py310"
 
