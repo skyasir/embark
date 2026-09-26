@@ -1,0 +1,132 @@
+{
+ "actions": [],
+ "autoname": "field:area_name",
+ "creation": "2026-09-19 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "area_name",
+  "target_doctype",
+  "key_field",
+  "applies_when",
+  "sequence",
+  "column_break_1",
+  "description",
+  "help_text",
+  "section_fields",
+  "fields"
+ ],
+ "fields": [
+  {
+   "fieldname": "area_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Area Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "target_doctype",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Target DocType",
+   "options": "DocType",
+   "reqd": 1
+  },
+  {
+   "description": "The field that identifies a record, e.g. item_code. Used to find duplicates and to check links from other sheets.",
+   "fieldname": "key_field",
+   "fieldtype": "Data",
+   "label": "Unique Field",
+   "reqd": 1
+  },
+  {
+   "description": "Order of the step on the customer's screen.",
+   "fieldname": "sequence",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Sequence"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "One plain sentence, e.g. Everyone you sell to.",
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "What the Customer Sees"
+  },
+  {
+   "description": "Shown on the upload screen.",
+   "fieldname": "help_text",
+   "fieldtype": "Text",
+   "label": "Tips"
+  },
+  {
+   "fieldname": "section_fields",
+   "fieldtype": "Section Break",
+   "label": "Columns"
+  },
+  {
+   "fieldname": "fields",
+   "fieldtype": "Table",
+   "label": "Columns",
+   "options": "Embark Area Field",
+   "reqd": 1
+  },
+  {
+   "description": "Leave empty to always collect this. Otherwise a condition on the answers, e.g. keeps_stock == yes",
+   "fieldname": "applies_when",
+   "fieldtype": "Data",
+   "label": "Ask When"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-19 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Embark",
+ "name": "Embark Data Area",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "permlevel": 0,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "permlevel": 0,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Embark Consultant",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "permlevel": 0,
+   "read": 1,
+   "role": "Embark Customer"
+  }
+ ],
+ "show_title_field_in_link": 0,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "area_name",
+ "track_changes": 1
+}

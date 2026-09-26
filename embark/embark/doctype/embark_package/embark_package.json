@@ -1,0 +1,124 @@
+{
+ "actions": [],
+ "autoname": "field:package_name",
+ "creation": "2026-09-19 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "package_name",
+  "hours",
+  "is_active",
+  "column_break_1",
+  "modules",
+  "description",
+  "section_areas",
+  "areas",
+  "section_desk",
+  "desk_roles"
+ ],
+ "fields": [
+  {
+   "fieldname": "package_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Package Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "hours",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Implementation Hours"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Active"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "As written in the implementation plan, e.g. Finance + Sales + Purchase + Inventory.",
+   "fieldname": "modules",
+   "fieldtype": "Data",
+   "label": "Modules"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "section_areas",
+   "fieldtype": "Section Break",
+   "label": "Data the Customer Prepares"
+  },
+  {
+   "fieldname": "areas",
+   "fieldtype": "Table",
+   "label": "Data Areas",
+   "options": "Embark Package Area"
+  },
+  {
+   "fieldname": "section_desk",
+   "fieldtype": "Section Break",
+   "label": "Desk Access"
+  },
+  {
+   "description": "Given to the customer when you invite them with desk access. Never include System Manager: setup and approval stay with the consultant.",
+   "fieldname": "desk_roles",
+   "fieldtype": "Table MultiSelect",
+   "label": "Desk Roles",
+   "options": "Embark Package Role"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-19 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Embark",
+ "name": "Embark Package",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "permlevel": 0,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "permlevel": 0,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Embark Consultant",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "permlevel": 0,
+   "read": 1,
+   "role": "Embark Customer"
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

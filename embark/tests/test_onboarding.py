@@ -1,0 +1,438 @@
+"""The customer journey end to end, run as a real Website User.
+
+bench --site <site> run-tests --module embark.tests.test_onboarding
+"""
+
+import io
+import json
+import zipfile
+
+import frappe
+from openpyxl import Workbook, load_workbook
+
+from embark import api
+from embark.conditions import applies
+from embark.engine import Column, build_columns, coerce, match_columns, split_header
+
+try:  # v16
+	from frappe.tests import IntegrationTestCase as TestCase
+except ImportError:  # v15
+	from frappe.tests.utils import FrappeTestCase as TestCase
+
+CUSTOMER = "ft-customer@example.com"
+OTHER = "ft-other@example.com"
+
+
+def xlsx(rows) -> bytes:
+	wb = Workbook()
+	for r in rows:
+		wb.active.append(r)
+	out = io.BytesIO()
+	wb.save(out)
+	return out.getvalue()
+
+
+class TestEngine(TestCase):
+	def test_header_below_a_title_row(self):
+		headers, rows = split_header(
+			[["Customer List"], [], ["Name", "GSTIN"], ["Sunrise", "27AAA"], [None, None]]
+		)
+		self.assertEqual(headers, ["Name", "GSTIN"])
+		self.assertEqual(rows, [(4, ["Sunrise", "27AAA"])])
+
+	def test_columns_match_by_alias_and_fuzzy(self):
+		cols = [
+			Column("customer_name", "Customer Name", "Data", aliases=["Party Name"]),
+			Column("tax_id", "Tax ID", "Data", aliases=["GSTIN"]),
+			Column("customer_group", "Customer Group", "Link"),
+		]
+		self.assertEqual(
+			match_columns(["Party Name", "GSTIN No.", "Customer Grp", "Notes"], cols),
+			{"Party Name": "customer_name", "GSTIN No.": "tax_id", "Customer Grp": "customer_group"},
+		)
+		self.assertEqual(match_columns(["GSTIN", "Notes"], cols), {"GSTIN": "tax_id"})
+
+	def test_coercion(self):
+		check = Column("x", "X", "Check")
+		self.assertEqual(coerce(check, "yes")[:2], (1, None))
+		self.assertEqual(coerce(check, "maybe")[1], "BAD_YESNO")
+		num = Column("x", "X", "Float")
+		self.assertEqual(coerce(num, "₹1,250.50")[:2], (1250.5, None))
+		phone = Column("x", "X", "Phone")
+		self.assertEqual(coerce(phone, 9876543210.0)[:2], ("9876543210", None))
+		choice = Column("x", "X", "Select", choices=["Company", "Individual"])
+		self.assertEqual(coerce(choice, "individual")[:2], ("Individual", None))
+		date = Column("x", "X", "Date")
+		self.assertEqual(coerce(date, "03/04/2026")[0], "2026-04-03")
+		required = Column("x", "X", "Data", required=True)
+		self.assertEqual(coerce(required, "  ")[1], "REQUIRED_MISSING")
+		defaulted = Column("x", "X", "Check", default="Yes")
+		self.assertEqual(coerce(defaulted, None)[:2], (1, None))
+
+
+class TestConditions(TestCase):
+	def test_conditions(self):
+		answers = {
+			"keeps_stock": "yes",
+			"business_type": "trading,manufacturing",
+			"tracks_batches": "no",
+			"unsure": "not_sure",
+		}
+		self.assertTrue(applies("", answers))
+		self.assertTrue(applies("keeps_stock == yes", answers))
+		self.assertFalse(applies("keeps_stock == no", answers))
+		self.assertTrue(applies("business_type == manufacturing", answers))  # one of several
+		self.assertTrue(applies("tracks_batches != yes", answers))
+		self.assertTrue(applies("tracks_batches == yes or keeps_stock == yes", answers))
+		self.assertFalse(applies("tracks_batches == yes and keeps_stock == yes", answers))
+		# Unanswered, "not sure" and nonsense all leave the step visible.
+		self.assertTrue(applies("never_asked == yes", answers))
+		self.assertTrue(applies("unsure == yes", answers))
+		self.assertTrue(applies("!!!", answers))
+
+
+class TestOnboardingFlow(TestCase):
+	def setUp(self):
+		frappe.set_user("Administrator")
+		self.onboarding = frappe.get_doc(
+			# Administrator as consultant: a user whose name is not an email address.
+			{
+				"doctype": "Embark Onboarding",
+				"client_name": "Sunrise Traders",
+				"package": "Package 1",
+				"consultant": "Administrator",
+			}
+		).insert()
+		api.invite_customer(self.onboarding.name, CUSTOMER, "Asha", send_email=0)
+		self.other = frappe.get_doc(
+			{"doctype": "Embark Onboarding", "client_name": "Other Co", "package": "Package 1"}
+		).insert()
+		api.invite_customer(self.other.name, OTHER, "Omar", send_email=0)
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		frappe.db.rollback()
+
+	def answer_interview(self, **answers):
+		"""Answer every question that gets asked, following the branches."""
+		while True:
+			questions = api.get_interview(self.onboarding.name)["questions"]
+			todo = {
+				q["key"]: answers.get(q["key"], self.default_answer(q)) for q in questions if not q["answer"]
+			}
+			if not todo:
+				return
+			api.save_answers(self.onboarding.name, todo)
+
+	@staticmethod
+	def default_answer(question):
+		if question["type"] == "Number":
+			return "1"
+		if question["type"] == "Yes / No":
+			return "yes"
+		return question["choices"][0]["value"]
+
+	def upload(self, area, rows, name=None):
+		"""Upload a sheet the way the portal does: a private File on the onboarding."""
+		f = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": name or f"{area}.xlsx",
+				"content": xlsx(rows),
+				"is_private": 1,
+				"attached_to_doctype": "Embark Onboarding",
+				"attached_to_name": self.onboarding.name,
+			}
+		).insert()
+		return api.attach_file(self.onboarding.name, area, f.file_url)
+
+	def test_customer_journey(self):
+		frappe.set_user(CUSTOMER)
+		self.assertEqual(frappe.db.get_value("User", CUSTOMER, "user_type"), "Website User")
+
+		overview = api.get_overview()
+		self.assertEqual(overview["name"], self.onboarding.name)
+		self.assertEqual(overview["readiness"], 0)
+		self.assertEqual([s["area"] for s in overview["steps"]][:2], ["Users", "Item Groups"])
+
+		self.answer_interview()
+		self.assertTrue(api.get_overview(self.onboarding.name)["interview"]["done"])
+
+		overview = api.save_company_details(
+			self.onboarding.name,
+			{
+				"company_name": "Sunrise Traders",
+				"country": "India",
+				"default_currency": "INR",
+				"fiscal_year_start": "2026-04-01",
+			},
+		)
+		self.assertTrue(overview["company_complete"])
+		self.assertEqual(overview["status"], "In Progress")
+
+		# Items first: their group is not uploaded yet, so it cannot be found.
+		area = self.upload(
+			"Items",
+			[
+				["Product List"],
+				["SKU", "Product Name", "Category", "UOM", "Maintain Stock", "MRP"],
+				["FG-1", "Rack", "Finished Goods", "nos", "Yes", "2,500"],
+				["FG-1", "Rack copy", "Products", "Nos", "Yes", "10"],
+				["RM-1", "Steel", "Products", "Kilo", "maybe", "abc"],
+			],
+		)
+		up = area["upload"]
+		mapped = {h["header"]: h["fieldname"] for h in up["headers"]}
+		self.assertEqual(mapped["SKU"], "item_code")
+		self.assertEqual(mapped["Category"], "item_group")
+		self.assertEqual(mapped["UOM"], "stock_uom")
+		codes = {(i["code"], i["fieldname"]) for i in up["issues"]}
+		self.assertIn(("NOT_FOUND", "item_group"), codes)  # Finished Goods
+		self.assertIn(("DUPLICATE", "item_code"), codes)
+		self.assertIn(("NOT_FOUND", "stock_uom"), codes)  # Kilo
+		kilo = next(i for i in up["issues"] if i["code"] == "NOT_FOUND" and i["fieldname"] == "stock_uom")
+		self.assertEqual(kilo["suggestions"], ["Kg"])
+		group = next(i for i in up["issues"] if i["code"] == "NOT_FOUND" and i["fieldname"] == "item_group")
+		self.assertIn("Item Groups step", group["hint"])
+		self.assertIn(("BAD_YESNO", "is_stock_item"), codes)
+		self.assertIn(("BAD_NUMBER", "standard_rate"), codes)
+		# 'nos' is the standard unit Nos, written in lower case: fixed silently.
+		self.assertEqual(up["preview"]["rows"][0]["stock_uom"], "Nos")
+		self.assertEqual(up["preview"]["rows"][0]["standard_rate"], 2500)
+
+		# Uploading Item Groups re-checks Items: Finished Goods is now known.
+		self.upload("Item Groups", [["Item Group", "Belongs To"], ["Finished Goods", ""]])
+		up = api.get_area(self.onboarding.name, "Items")["upload"]
+		self.assertNotIn(("NOT_FOUND", "item_group"), {(i["code"], i["fieldname"]) for i in up["issues"]})
+
+		# Fix on screen: one value everywhere, and single rows.
+		api.fix_value(self.onboarding.name, "Items", "stock_uom", "Kg", old_value="Kilo")
+		api.fix_value(self.onboarding.name, "Items", "item_code", "FG-2", row=4)
+		api.fix_value(self.onboarding.name, "Items", "is_stock_item", "Yes", row=5)
+		up = api.fix_value(self.onboarding.name, "Items", "standard_rate", "90", row=5)["upload"]
+		self.assertEqual(up["errors"], 0, up["issues"])
+
+		# The file itself is untouched; fixes live beside it.
+		stored = frappe.get_doc("Embark Upload", {"onboarding": self.onboarding.name, "data_area": "Items"})
+		self.assertEqual(json.loads(stored.overrides)["*"]["stock_uom"], {"Kilo": "Kg"})
+
+		self.upload("Users", [["Name", "Email"], ["Asha", "asha@sunrise.com"]])
+		self.upload("Warehouses", [["Godown"], ["Main Store"], ["Shop"]])
+		self.upload("Customers", [["Party Name", "GSTIN", "Mobile"], ["Acme", "27AAACS1234A1Z5", 9876543210]])
+
+		# A column the customer's file lacks can be chosen by hand.
+		area = self.upload("Suppliers", [["Vendor", "Branch Office"], ["Apex Steel", "Pune"]])
+		self.assertEqual(
+			{h["header"]: h["fieldname"] for h in area["upload"]["headers"]}["Branch Office"], None
+		)
+		area = api.set_column(self.onboarding.name, "Suppliers", "Branch Office", "address_city")
+		self.assertEqual(area["upload"]["preview"]["rows"][0]["address_city"], "Pune")
+
+		overview = api.get_overview(self.onboarding.name)
+		self.assertEqual(overview["readiness"], 100, overview["steps"])
+		self.assertTrue(overview["can_submit"])
+
+		# A customer cannot approve themselves or change consultant-owned fields.
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		doc.status = "Approved"
+		self.assertRaises(frappe.ValidationError, doc.save)
+		doc.reload()
+		doc.package = "Package 2"
+		doc.save()
+		self.assertEqual(frappe.db.get_value("Embark Onboarding", doc.name, "package"), "Package 1")
+
+		overview = api.submit_for_review(self.onboarding.name)
+		self.assertEqual(overview["status"], "Submitted")
+		self.assertTrue(overview["locked"])
+		self.assertRaises(frappe.ValidationError, self.upload, "Users", [["Email"], ["x@y.com"]])
+
+		# The consultant gets ERPNext-shaped files.
+		frappe.set_user("Administrator")
+		api.download_prepared_data(self.onboarding.name)
+		zf = zipfile.ZipFile(io.BytesIO(frappe.response.filecontent))
+		items = next(n for n in zf.namelist() if n.endswith("Items.xlsx"))
+		sheet = load_workbook(io.BytesIO(zf.read(items))).active
+		header = [c.value for c in sheet[1]]
+		self.assertIn("Item Code", header)
+		self.assertEqual(sheet.max_row, 4)
+		warehouses = next(n for n in zf.namelist() if n.endswith("Warehouses.xlsx"))
+		self.assertEqual(load_workbook(io.BytesIO(zf.read(warehouses))).active["A2"].value, "Sunrise Traders")
+
+		self.assertEqual(
+			api.review(self.onboarding.name, "Returned", "Add your price list")["status"], "Returned"
+		)
+		frappe.set_user(CUSTOMER)
+		self.assertEqual(api.get_overview()["review_notes"], "Add your price list")
+
+	def test_remove_file(self):
+		frappe.set_user(CUSTOMER)
+		self.upload("Units of Measure", [["Unit"], ["Carton"]])
+		self.assertEqual(self.step("Units of Measure")["status"], "Ready")
+		area = api.remove_file(self.onboarding.name, "Units of Measure")
+		self.assertIsNone(area["upload"])
+		self.assertEqual(self.step("Units of Measure")["status"], "Not Started")
+		self.assertFalse(frappe.db.exists("Embark Upload", {"onboarding": self.onboarding.name}))
+
+		# Once sent for review, the customer can't remove files either.
+		self.upload("Units of Measure", [["Unit"], ["Carton"]])
+		frappe.db.set_value("Embark Onboarding", self.onboarding.name, "status", "Submitted")
+		self.assertRaises(frappe.ValidationError, api.remove_file, self.onboarding.name, "Units of Measure")
+
+	def step(self, area):
+		return next(s for s in api.get_overview(self.onboarding.name)["steps"] if s["area"] == area)
+
+	def test_customers_are_isolated(self):
+		frappe.set_user(OTHER)
+		self.assertEqual(api.get_overview()["name"], self.other.name)
+		self.assertRaises(frappe.PermissionError, api.get_overview, self.onboarding.name)
+		self.assertRaises(frappe.PermissionError, api.get_area, self.onboarding.name, "Items")
+		self.assertEqual(
+			frappe.get_list("Embark Onboarding", pluck="name"),
+			[self.other.name],
+		)
+		self.assertRaises(frappe.PermissionError, api.download_prepared_data, self.other.name)
+		self.assertRaises(frappe.PermissionError, api.invite_customer, self.other.name, "x@example.com", "X")
+
+	def test_file_must_belong_to_the_onboarding(self):
+		frappe.set_user(OTHER)
+		f = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": "theirs.xlsx",
+				"content": xlsx([["Email"], ["a@b.com"]]),
+				"is_private": 1,
+				"attached_to_doctype": "Embark Onboarding",
+				"attached_to_name": self.other.name,
+			}
+		).insert()
+		frappe.set_user(CUSTOMER)
+		self.assertRaises(frappe.ValidationError, api.attach_file, self.onboarding.name, "Users", f.file_url)
+
+	def test_consultant_starts_the_onboarding(self):
+		# Embark runs on the customer's own site: one onboarding, started by the consultant.
+		frappe.db.delete("Embark Upload")
+		frappe.db.delete("Embark Onboarding")
+		self.assertTrue(api.get_overview()["needs_start"])
+
+		frappe.set_user(CUSTOMER)
+		self.assertRaises(
+			frappe.PermissionError,
+			api.start_onboarding,
+			"Yasir Traders",
+			"Package 1",
+			"yasir@example.com",
+			"Yasir",
+		)
+
+		frappe.set_user("Administrator")
+		result = api.start_onboarding(
+			"Yasir Traders", "Package 1", "yasir@example.com", "Yasir", send_email=0
+		)
+		self.assertEqual(result["overview"]["client_name"], "Yasir Traders")
+		self.assertEqual(result["overview"]["portal_user"], "yasir@example.com")
+		self.assertIn("update-password", result["invite"]["setup_link"])
+		self.assertEqual(frappe.db.get_value("User", "yasir@example.com", "user_type"), "Website User")
+		self.assertEqual(api.get_overview()["name"], result["overview"]["name"])
+		self.assertRaises(
+			frappe.ValidationError, api.start_onboarding, "Again", "Package 1", "x@example.com", "X"
+		)
+
+	def test_standard_values_before_setup(self):
+		from unittest.mock import patch
+
+		from embark.embark.doctype.embark_upload import embark_upload
+		from embark.presets import standard_values
+
+		self.assertIn("Nos", standard_values("UOM"))
+		self.assertIn("Commercial", standard_values("Customer Group", "India"))
+		self.assertIn("Products", standard_values("Item Group", "India"))
+		self.assertIn("India", standard_values("Territory", "India"))
+
+		# On a site whose setup wizard has not run, those tables are empty.
+		real_get_all = frappe.get_all
+
+		def empty_masters(doctype, *args, **kwargs):
+			if doctype in ("UOM", "Item Group", "Customer Group", "Supplier Group", "Territory"):
+				return []
+			return real_get_all(doctype, *args, **kwargs)
+
+		columns = build_columns(frappe.get_doc("Embark Data Area", "Items"))
+		with patch.object(embark_upload.frappe, "get_all", side_effect=empty_masters):
+			known = embark_upload.known_values(self.onboarding.name, columns)
+		self.assertEqual(known["UOM"].get("nos"), "Nos")
+		self.assertEqual(known["Item Group"].get("products"), "Products")
+
+	def test_desk_access(self):
+		frappe.set_user("Administrator")
+		api.invite_customer(self.onboarding.name, CUSTOMER, "Asha", send_email=0, desk_access=1)
+		user = frappe.get_doc("User", CUSTOMER)
+		roles = {r.role for r in user.roles}
+		self.assertEqual(user.user_type, "System User")
+		self.assertTrue({"Embark Customer", "Sales User", "Stock User"} <= roles)
+		self.assertNotIn("System Manager", roles)
+		if user.meta.has_field("default_app"):
+			self.assertEqual(user.default_app, "embark")  # they still land in Embark
+
+		frappe.set_user(CUSTOMER)
+		self.assertTrue(api.get_overview()["can_use_desk"])
+		self.assertRaises(frappe.PermissionError, api.review, self.onboarding.name, "Approved")
+
+		# Back to portal only: the desk roles go, the portal role stays.
+		frappe.set_user("Administrator")
+		api.invite_customer(self.onboarding.name, CUSTOMER, "Asha", send_email=0, desk_access=0)
+		user.reload()
+		self.assertEqual(user.user_type, "Website User")
+		self.assertEqual({r.role for r in user.roles} & {"Sales User", "Stock User"}, set())
+		self.assertIn("Embark Customer", {r.role for r in user.roles})
+
+	def test_interview_shapes_the_onboarding(self):
+		frappe.set_user(CUSTOMER)
+
+		def steps():
+			return [s["area"] for s in api.get_overview(self.onboarding.name)["steps"]]
+
+		def item_columns():
+			return {c["fieldname"] for c in api.get_area(self.onboarding.name, "Items")["columns"]}
+
+		# Nothing answered yet: everything is still on the table.
+		self.assertIn("Warehouses", steps())
+		self.assertTrue({"has_batch_no", "is_stock_item"} <= item_columns())
+		self.assertEqual(api.get_overview(self.onboarding.name)["interview"]["answered"], 0)
+
+		# A business with no stock is not asked for warehouses or stock columns.
+		overview = api.save_answers(self.onboarding.name, {"keeps_stock": "no", "business_type": "services"})
+		self.assertNotIn("Warehouses", steps())
+		self.assertEqual(item_columns() & {"has_batch_no", "has_serial_no", "is_stock_item"}, set())
+		self.assertEqual(overview["interview"]["answered"], 2)
+		# The stock questions are no longer asked, so they are not counted either.
+		asked = [q["key"] for q in api.get_interview(self.onboarding.name)["questions"]]
+		self.assertNotIn("tracks_batches", asked)
+
+		# The template follows the same columns.
+		api.download_template("Items", self.onboarding.name)
+		headers = [c.value for c in load_workbook(io.BytesIO(frappe.response.filecontent)).active[1]]
+		self.assertNotIn("Batch Tracked", headers)
+
+		# Saying yes again brings the step and its questions back.
+		api.save_answers(self.onboarding.name, {"keeps_stock": "yes"})
+		self.assertIn("Warehouses", steps())
+		self.assertIn(
+			"tracks_batches", [q["key"] for q in api.get_interview(self.onboarding.name)["questions"]]
+		)
+
+		# A step that already holds an upload is never taken away.
+		self.upload("Warehouses", [["Godown"], ["Main Store"]])
+		api.save_answers(self.onboarding.name, {"keeps_stock": "no"})
+		self.assertIn("Warehouses", steps())
+
+		self.assertRaises(
+			frappe.ValidationError, api.save_answers, self.onboarding.name, {"keeps_stock": "maybe"}
+		)
+		self.assertRaises(frappe.ValidationError, api.save_answers, self.onboarding.name, {"nope": "yes"})
+
+	def test_template_download(self):
+		frappe.set_user(CUSTOMER)
+		api.download_template("Customers", self.onboarding.name)
+		wb = load_workbook(io.BytesIO(frappe.response.filecontent))
+		self.assertEqual(wb.sheetnames[1], "How to fill")
+		self.assertEqual(wb.active["A1"].value, "Customer Name *")

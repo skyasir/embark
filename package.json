@@ -1,0 +1,10 @@
+{
+  "name": "embark",
+  "private": true,
+  "description": "Build hooks so bench installs and builds the Embark portal.",
+  "scripts": {
+    "postinstall": "cd frontend && yarn install --check-files",
+    "dev": "cd frontend && yarn dev",
+    "build": "cd frontend && yarn build"
+  }
+}

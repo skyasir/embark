@@ -1,0 +1,610 @@
+"""Endpoints for the customer portal and the consultant's actions.
+
+Embark runs on the customer's own site, one onboarding per site. The site is
+handed over before ERPNext's setup wizard has run, and until then the desk only
+shows the wizard, so everything the consultant needs before setup (start,
+invite, review) is also available from the portal.
+
+Every call loads the onboarding through ``_get_onboarding``, which applies the
+normal permission check (and so the row-level hooks in permissions.py). A
+customer can therefore only ever reach their own record.
+"""
+
+from __future__ import annotations
+
+import json
+
+import frappe
+from frappe import _
+from frappe.utils import cstr, flt, get_fullname, validate_email_address
+
+from embark.conditions import applies
+from embark.embark.doctype.embark_onboarding.embark_onboarding import (
+	LOCKED_STATUSES,
+)
+from embark.engine import build_columns
+from embark.permissions import is_staff
+from embark.sheets import prepared_zip, template_xlsx
+
+# The company questions the customer answers on the portal.
+COMPANY_FIELDS = (
+	"company_name",
+	"country",
+	"default_currency",
+	"fiscal_year_start",
+	"chart_of_accounts",
+	"tax_id",
+	"company_email",
+	"company_phone",
+	"company_address",
+)
+
+MAX_ISSUES_SENT = 500
+PREVIEW_ROWS = 20
+
+
+# ── Customer portal ───────────────────────────────────────────────────────────
+
+
+@frappe.whitelist()
+def get_overview(onboarding: str | None = None) -> dict:
+	if not onboarding and is_staff() and not frappe.db.count("Embark Onboarding"):
+		# A freshly created customer site: the consultant starts here.
+		return {
+			"needs_start": True,
+			"is_staff": True,
+			"packages": frappe.get_all(
+				"Embark Package",
+				filters={"is_active": 1},
+				fields=["name", "modules", "hours"],
+				order_by="name asc",
+			),
+			"user": {"name": frappe.session.user, "full_name": get_fullname(frappe.session.user)},
+			"can_use_desk": True,
+		}
+	doc = _get_onboarding(onboarding)
+	package = frappe.get_cached_doc("Embark Package", doc.package)
+	areas = {
+		a.name: a
+		for a in frappe.get_all(
+			"Embark Data Area",
+			filters={"name": ("in", [row.data_area for row in doc.areas] or [""])},
+			fields=["name", "description", "sequence"],
+		)
+	}
+	steps = sorted(
+		(
+			{
+				"area": row.data_area,
+				"description": areas[row.data_area].description if row.data_area in areas else "",
+				"sequence": areas[row.data_area].sequence if row.data_area in areas else 0,
+				"required": bool(row.required),
+				"status": row.status,
+				"rows": row.rows,
+				"errors": row.errors,
+				"warnings": row.warnings,
+			}
+			for row in doc.areas
+		),
+		key=lambda s: s["sequence"],
+	)
+	return {
+		"name": doc.name,
+		"client_name": doc.client_name,
+		"status": doc.status,
+		"readiness": doc.readiness,
+		"review_notes": doc.review_notes if doc.status == "Returned" else None,
+		"target_go_live": doc.target_go_live,
+		"locked": _locked(doc),
+		"is_staff": is_staff(),
+		"package": {
+			"name": package.name,
+			"modules": package.modules,
+			"hours": package.hours,
+			"description": package.description,
+		},
+		"interview": doc.interview(),
+		"company": {f: doc.get(f) for f in COMPANY_FIELDS},
+		"company_complete": doc.company_complete(),
+		"steps": steps,
+		"can_submit": doc.readiness == 100 and doc.status not in LOCKED_STATUSES,
+		"portal_user": doc.portal_user if is_staff() else None,
+		"portal_user_has_desk": bool(
+			is_staff()
+			and doc.portal_user
+			and frappe.db.get_value("User", doc.portal_user, "user_type") == "System User"
+		),
+		"can_use_desk": _can_use_desk(),
+		"has_data": any(row.rows for row in doc.areas),
+		"user": {"name": frappe.session.user, "full_name": get_fullname(frappe.session.user)},
+	}
+
+
+@frappe.whitelist()
+def get_interview(onboarding: str | None = None) -> dict:
+	"""The questions that apply right now, with whatever has been answered."""
+	doc = _get_onboarding(onboarding)
+	answers = doc.answer_map()
+	questions = []
+	for q in frappe.get_all(
+		"Embark Question",
+		filters={"is_active": 1},
+		fields=[
+			"name",
+			"label",
+			"section_title",
+			"answer_type",
+			"choices",
+			"help_text",
+			"applies_when",
+			"allow_not_sure",
+		],
+		order_by="sequence asc",
+	):
+		if not applies(q.applies_when, answers):
+			continue
+		questions.append(
+			{
+				"key": q.name,
+				"label": q.label,
+				"section": q.section_title or _("About your business"),
+				"type": q.answer_type,
+				"help": q.help_text,
+				"allow_not_sure": bool(q.allow_not_sure),
+				"choices": _choices(q),
+				"answer": answers.get(q.name, ""),
+			}
+		)
+	return {"name": doc.name, "questions": questions, "progress": doc.interview(), "locked": _locked(doc)}
+
+
+@frappe.whitelist(methods=["POST"])
+def save_answers(onboarding: str, answers: str | dict) -> dict:
+	"""Store the answers, then rebuild the steps they imply."""
+	doc = _get_onboarding(onboarding, "write")
+	given = frappe.parse_json(answers) or {}
+	questions = {
+		q.name: q
+		for q in frappe.get_all(
+			"Embark Question", fields=["name", "answer_type", "choices", "allow_not_sure"]
+		)
+	}
+	rows = {row.question: row for row in doc.answers}
+	for key, value in given.items():
+		question = questions.get(key)
+		if not question:
+			frappe.throw(_("{0} is not one of the questions.").format(key))
+		clean = _clean_answer(question, value)
+		if key in rows:
+			rows[key].answer = clean
+		else:
+			doc.append("answers", {"question": key, "answer": clean})
+	doc.save()
+	return get_overview(doc.name)
+
+
+def _choices(question) -> list[dict]:
+	"""Choices are written as "key | What the customer sees", one per line."""
+	out = []
+	for line in (question.choices or "").splitlines():
+		if not line.strip():
+			continue
+		value, _sep, label = line.partition("|")
+		out.append({"value": value.strip(), "label": (label or value).strip()})
+	return out
+
+
+def _clean_answer(question, value) -> str:
+	value = cstr(value).strip()
+	if not value or value == "not_sure":
+		if value and not question.allow_not_sure:
+			frappe.throw(_("Please answer: {0}").format(question.name))
+		return value
+	if question.answer_type == "Yes / No":
+		if value not in ("yes", "no"):
+			frappe.throw(_("Answer {0} with yes or no.").format(question.name))
+		return value
+	if question.answer_type == "Number":
+		number = flt(value)
+		return str(int(number)) if number == int(number) else str(number)
+	allowed = {c["value"] for c in _choices(question)}
+	chosen = [v.strip() for v in value.split(",") if v.strip()]
+	if not set(chosen) <= allowed:
+		frappe.throw(_("{0} is not one of the choices for {1}.").format(value, question.name))
+	if question.answer_type == "One choice" and len(chosen) > 1:
+		frappe.throw(_("Pick one answer for {0}.").format(question.name))
+	return ",".join(chosen)
+
+
+@frappe.whitelist()
+def get_company_choices() -> dict:
+	return {
+		"countries": frappe.get_all("Country", pluck="name", order_by="name asc"),
+		# All currencies, not just enabled ones: a new site enables only a few,
+		# and the setup wizard enables the one the customer picks.
+		"currencies": frappe.get_all("Currency", pluck="name", order_by="name asc"),
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def save_company_details(onboarding: str, values: str | dict) -> dict:
+	doc = _get_onboarding(onboarding, "write")
+	values = frappe.parse_json(values) or {}
+	doc.update({f: values.get(f) or None for f in COMPANY_FIELDS if f in values})
+	doc.save()
+	return get_overview(doc.name)
+
+
+@frappe.whitelist()
+def get_area(onboarding: str, area: str) -> dict:
+	doc = _get_onboarding(onboarding)
+	_ensure_area(doc, area)
+	area_doc = frappe.get_cached_doc("Embark Data Area", area)
+	answers = doc.answer_map()
+	out = {
+		"area": {
+			"name": area_doc.name,
+			"description": area_doc.description,
+			"help_text": area_doc.help_text,
+			"required": next(bool(r.required) for r in doc.areas if r.data_area == area),
+		},
+		"columns": [c.as_dict() for c in build_columns(area_doc, answers)],
+		"locked": _locked(doc),
+		"upload": None,
+	}
+
+	name = _upload_name(doc.name, area)
+	if not name:
+		return out
+
+	upload = frappe.get_doc("Embark Upload", name)
+	ev = upload.evaluate()
+	column_map = frappe.parse_json(upload.column_map) or {}
+	by_field = {c.fieldname: c for c in ev.columns}
+	mapped = [c for c in ev.columns if c.fieldname in column_map.values() or c.default]
+
+	out["upload"] = {
+		"file_name": upload.file_name,
+		"file_url": upload.file_url,
+		"headers": [
+			{
+				"header": h,
+				"fieldname": column_map.get(h),
+				"samples": _samples(ev.rows, i),
+			}
+			for i, h in enumerate(ev.headers)
+		],
+		"rows": len(ev.rows),
+		"errors": ev.result.errors,
+		"warnings": ev.result.warnings,
+		"groups": ev.result.groups,
+		"issues": ev.result.issues[:MAX_ISSUES_SENT],
+		"preview": {
+			"columns": [{"fieldname": c.fieldname, "label": c.label} for c in mapped],
+			"rows": [{k: r.get(k) for k in ("_row", *by_field)} for r in ev.result.rows[:PREVIEW_ROWS]],
+		},
+	}
+	return out
+
+
+@frappe.whitelist()
+def download_template(area: str, onboarding: str | None = None):
+	"""The template for this step, with only the columns the answers call for."""
+	doc = _get_onboarding(onboarding)
+	_ensure_area(doc, area)
+	area_doc = frappe.get_doc("Embark Data Area", area)
+	area_doc.check_permission("read")
+	_send_file(_("{0} - template.xlsx").format(area_doc.area_name), template_xlsx(area_doc, doc.answer_map()))
+
+
+@frappe.whitelist(methods=["POST"])
+def attach_file(onboarding: str, area: str, file_url: str) -> dict:
+	"""Point the area at a newly uploaded file and check it straight away."""
+	doc = _get_onboarding(onboarding, "write")
+	_ensure_area(doc, area)
+	name = _upload_name(doc.name, area)
+	upload = frappe.get_doc("Embark Upload", name) if name else frappe.new_doc("Embark Upload")
+	# A new file starts clean: column choices and fixes belong to the old one's rows.
+	upload.update(
+		{
+			"onboarding": doc.name,
+			"data_area": area,
+			"file_url": file_url,
+			"headers": None,
+			"column_map": None,
+			"overrides": None,
+		}
+	)
+	upload.save()
+	return get_area(doc.name, area)
+
+
+@frappe.whitelist(methods=["POST"])
+def set_column(onboarding: str, area: str, header: str, fieldname: str | None = None) -> dict:
+	"""Say which ERPNext field a heading in the customer's file feeds (or none)."""
+	upload = _get_upload(onboarding, area)
+	columns = {
+		c.fieldname
+		for c in build_columns(
+			frappe.get_cached_doc("Embark Data Area", area),
+			frappe.get_doc("Embark Onboarding", onboarding).answer_map(),
+		)
+	}
+	if fieldname and fieldname not in columns:
+		frappe.throw(_("{0} is not a column of {1}.").format(fieldname, area))
+
+	column_map = frappe.parse_json(upload.column_map) or {}
+	# One heading per field: choosing a field for this heading frees it elsewhere.
+	column_map = {h: f for h, f in column_map.items() if h != header and f != fieldname}
+	if fieldname:
+		column_map[header] = fieldname
+	upload.column_map = json.dumps(column_map)
+	upload.save()
+	return get_area(onboarding, area)
+
+
+@frappe.whitelist(methods=["POST"])
+def fix_value(
+	onboarding: str,
+	area: str,
+	fieldname: str,
+	value: str | None = None,
+	row: int | None = None,
+	old_value: str | None = None,
+) -> dict:
+	"""Correct a value on screen: one row (``row``) or every row holding ``old_value``."""
+	upload = _get_upload(onboarding, area)
+	overrides = frappe.parse_json(upload.overrides) or {}
+	if row is not None:
+		overrides.setdefault(str(int(row)), {})[fieldname] = cstr(value)
+	elif old_value is not None:
+		overrides.setdefault("*", {}).setdefault(fieldname, {})[cstr(old_value).strip()] = cstr(value)
+	else:
+		frappe.throw(_("Say which row or which value to change."))
+	upload.overrides = json.dumps(overrides)
+	upload.save()
+	return get_area(onboarding, area)
+
+
+@frappe.whitelist(methods=["POST"])
+def remove_file(onboarding: str, area: str) -> dict:
+	upload = _get_upload(onboarding, area)
+	upload.delete()
+	return get_area(onboarding, area)
+
+
+@frappe.whitelist(methods=["POST"])
+def submit_for_review(onboarding: str) -> dict:
+	doc = _get_onboarding(onboarding, "write")
+	if doc.readiness != 100:
+		frappe.throw(_("Finish every required step before sending your data for review."))
+	doc.status = "Submitted"
+	doc.save()
+	doc.add_comment("Info", _("Sent for review by {0}").format(get_fullname(frappe.session.user)))
+	_notify_consultant(doc)
+	return get_overview(doc.name)
+
+
+def _notify_consultant(doc):
+	"""Email the consultant; a mail problem must never undo the customer's submission."""
+	# The consultant is a User link, and a user's name is not always an address
+	# ("Administrator"), so send to the User's email field.
+	email = (
+		validate_email_address(frappe.db.get_value("User", doc.consultant, "email") or "")
+		if doc.consultant
+		else ""
+	)
+	if not email:
+		return
+	try:
+		frappe.sendmail(
+			recipients=[email],
+			subject=_("{0} has sent their onboarding data for review").format(doc.client_name),
+			message=_("{0} is ready for review.").format(
+				frappe.utils.get_link_to_form(doc.doctype, doc.name)
+			),
+			reference_doctype=doc.doctype,
+			reference_name=doc.name,
+		)
+	except Exception:
+		frappe.log_error(title=f"Onboarding review email failed for {doc.name}")
+
+
+# ── Consultant ────────────────────────────────────────────────────────────────
+
+
+@frappe.whitelist(methods=["POST"])
+def start_onboarding(
+	client_name: str,
+	package: str,
+	email: str,
+	first_name: str,
+	last_name: str | None = None,
+	send_email: int = 1,
+	desk_access: int = 0,
+) -> dict:
+	"""Set this customer site up for Embark: the onboarding for their package, and their login."""
+	_require_staff()
+	if frappe.db.count("Embark Onboarding"):
+		frappe.throw(_("This site already has an onboarding. Each customer site has one."))
+	if not frappe.db.get_value("Embark Package", package, "is_active"):
+		frappe.throw(_("Choose one of the active packages."))
+	doc = frappe.get_doc(
+		{
+			"doctype": "Embark Onboarding",
+			"client_name": cstr(client_name).strip(),
+			"package": package,
+			"consultant": frappe.session.user,
+		}
+	).insert()
+	invite = invite_customer(doc.name, email, first_name, last_name, send_email, desk_access)
+	return {"overview": get_overview(doc.name), "invite": invite}
+
+
+@frappe.whitelist(methods=["POST"])
+def invite_customer(
+	onboarding: str,
+	email: str,
+	first_name: str,
+	last_name: str | None = None,
+	send_email: int = 1,
+	desk_access: int = 0,
+) -> dict:
+	"""Create (or reuse) the customer's login and link it to the onboarding.
+
+	``desk_access`` 0: portal only. 1: the package's desk roles too, with Embark
+	as the app they land in, so they can switch to the desk when they want.
+	"""
+	_require_staff()
+	doc = _get_onboarding(onboarding, "write")
+	email = cstr(email).strip().lower()
+	validate_email_address(email, throw=True)
+	if frappe.db.exists("User", email) and is_staff(email):
+		frappe.throw(_("{0} is a consultant login. Invite the customer with their own email.").format(email))
+
+	if frappe.db.exists("User", email):
+		user = frappe.get_doc("User", email)
+	else:
+		# Consultants may not hold User permissions. This endpoint can only create
+		# a Website User carrying the single portal role, so bypassing them is safe.
+		user = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": email,
+				"first_name": first_name,
+				"last_name": last_name,
+				"user_type": "Website User",
+				"send_welcome_email": 0,
+			}
+		).insert(ignore_permissions=True)
+	_set_access(user, doc.package, int(desk_access))
+
+	doc.portal_user = email
+	doc.save()
+
+	if int(send_email):
+		user.send_welcome_mail_to_user()
+		return {"user": email, "emailed": True}
+	# v15 calls it reset_password, v16 renamed it _reset_password.
+	make_link = getattr(user, "_reset_password", None) or user.reset_password
+	return {"user": email, "emailed": False, "setup_link": make_link(send_email=False)}
+
+
+def _set_access(user, package: str, desk_access: int):
+	"""Portal only, or portal plus the package's desk roles. Never System Manager."""
+	desk_roles = {row.role for row in frappe.get_cached_doc("Embark Package", package).desk_roles}
+	keep = [r for r in user.roles if desk_access or r.role not in desk_roles]
+	have = {r.role for r in keep}
+	user.set("roles", keep)
+	for role in ({"Embark Customer"} | (desk_roles if desk_access else set())) - have:
+		user.append("roles", {"role": role})
+	user.user_type = "System User" if desk_access else "Website User"
+	if user.meta.has_field("default_app"):  # v15.x+: the app a desk user lands in
+		user.default_app = (
+			"embark" if desk_access else (None if user.default_app == "embark" else user.default_app)
+		)
+	# Consultants may not hold User permissions; this only ever grants the portal
+	# role and the package's own desk roles, never System Manager.
+	user.flags.ignore_permissions = True
+	user.save()
+
+
+@frappe.whitelist(methods=["POST"])
+def review(onboarding: str, decision: str, notes: str | None = None) -> dict:
+	_require_staff()
+	if decision not in ("Approved", "Returned"):
+		frappe.throw(_("Choose Approved or Returned."))
+	doc = _get_onboarding(onboarding, "write")
+	doc.status = decision
+	if notes is not None:
+		doc.review_notes = notes
+	doc.save()
+	doc.add_comment("Info", _("{0} by {1}").format(_(decision), get_fullname(frappe.session.user)))
+	return {"status": doc.status}
+
+
+@frappe.whitelist()
+def download_prepared_data(onboarding: str):
+	_require_staff()
+	doc = _get_onboarding(onboarding)
+	_send_file(f"{doc.client_name} - prepared data.zip", prepared_zip(doc))
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+
+def _get_onboarding(onboarding: str | None = None, ptype: str = "read"):
+	if not onboarding:
+		# The customer's own onboarding; for a consultant, the site's onboarding.
+		filters = {} if is_staff() else {"portal_user": frappe.session.user}
+		onboarding = frappe.db.get_value("Embark Onboarding", filters, "name", order_by="creation desc")
+		if not onboarding:
+			frappe.throw(
+				_("No onboarding is linked to your login yet. Please contact your consultant."),
+				frappe.DoesNotExistError,
+			)
+	doc = frappe.get_doc("Embark Onboarding", onboarding)
+	doc.check_permission(ptype)
+	return doc
+
+
+def _get_upload(onboarding: str, area: str):
+	doc = _get_onboarding(onboarding, "write")
+	_ensure_area(doc, area)
+	name = _upload_name(doc.name, area)
+	if not name:
+		frappe.throw(_("Upload a file for {0} first.").format(area))
+	return frappe.get_doc("Embark Upload", name)
+
+
+def _upload_name(onboarding: str, area: str) -> str | None:
+	return frappe.db.get_value("Embark Upload", {"onboarding": onboarding, "data_area": area})
+
+
+def _ensure_area(doc, area: str):
+	if area not in {row.data_area for row in doc.areas}:
+		frappe.throw(_("{0} is not part of your package.").format(area), frappe.DoesNotExistError)
+
+
+def _can_use_desk() -> bool:
+	"""A desk login, and a desk that will let them in.
+
+	Until ERPNext's setup wizard has run, the desk admits only System Managers,
+	so the customer's "Switch to Desk" appears once the consultant completes it.
+	"""
+	if frappe.db.get_value("User", frappe.session.user, "user_type") != "System User":
+		return False
+	# frappe.is_setup_complete() reads the per-app flags, which is what the desk
+	# itself checks; System Settings can say complete while ERPNext is not.
+	done = (
+		frappe.is_setup_complete()
+		if hasattr(frappe, "is_setup_complete")
+		else frappe.db.get_single_value("System Settings", "setup_complete")
+	)
+	return is_staff() or bool(done)
+
+
+def _locked(doc) -> bool:
+	return doc.status in LOCKED_STATUSES and not is_staff()
+
+
+def _require_staff():
+	if not is_staff():
+		frappe.throw(_("Only consultants can do this."), frappe.PermissionError)
+
+
+def _samples(rows, index: int, limit: int = 3) -> list[str]:
+	out = []
+	for _row, cells in rows:
+		value = cells[index] if index < len(cells) else None
+		if value not in (None, ""):
+			out.append(cstr(value)[:40])
+			if len(out) == limit:
+				break
+	return out
+
+
+def _send_file(filename: str, content: bytes):
+	frappe.response.filename = filename
+	frappe.response.filecontent = content
+	frappe.response.type = "binary"

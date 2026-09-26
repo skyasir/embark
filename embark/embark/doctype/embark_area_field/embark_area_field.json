@@ -1,0 +1,104 @@
+{
+ "actions": [],
+ "creation": "2026-09-19 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "fieldname",
+  "label",
+  "required",
+  "fieldtype",
+  "default_value",
+  "example",
+  "options",
+  "hint",
+  "aliases",
+  "applies_when"
+ ],
+ "fields": [
+  {
+   "columns": 2,
+   "description": "Fieldname on the target doctype, or a name of your own for an extra column.",
+   "fieldname": "fieldname",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "ERPNext Field",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Column Heading"
+  },
+  {
+   "columns": 1,
+   "fieldname": "required",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Required"
+  },
+  {
+   "columns": 1,
+   "description": "Only for extra columns that are not fields on the target doctype, such as contact and address details.",
+   "fieldname": "fieldtype",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Extra Column Type",
+   "options": "\nData\nEmail\nPhone\nInt\nFloat\nCurrency\nDate\nCheck\nSelect\nLink"
+  },
+  {
+   "columns": 1,
+   "description": "Used when the customer leaves the cell empty.",
+   "fieldname": "default_value",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Default"
+  },
+  {
+   "columns": 2,
+   "fieldname": "example",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Example"
+  },
+  {
+   "description": "Extra columns only: one choice per line for Select, the doctype for Link.",
+   "fieldname": "options",
+   "fieldtype": "Small Text",
+   "label": "Options"
+  },
+  {
+   "description": "Shown to the customer in the template and on screen.",
+   "fieldname": "hint",
+   "fieldtype": "Small Text",
+   "label": "What to Enter"
+  },
+  {
+   "description": "Comma-separated headings to recognise in the customer's own file, e.g. Party Name, Client.",
+   "fieldname": "aliases",
+   "fieldtype": "Small Text",
+   "label": "Other Headings"
+  },
+  {
+   "description": "Condition on the answers, e.g. tracks_batches == yes",
+   "fieldname": "applies_when",
+   "fieldtype": "Data",
+   "label": "Ask When"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-09-19 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Embark",
+ "name": "Embark Area Field",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}
