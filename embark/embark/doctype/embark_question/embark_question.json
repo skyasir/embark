@@ -1,0 +1,142 @@
+{
+ "actions": [],
+ "autoname": "field:question_key",
+ "creation": "2026-09-22 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "question_key",
+  "label",
+  "section_title",
+  "sequence",
+  "column_break_1",
+  "answer_type",
+  "choices",
+  "allow_not_sure",
+  "is_active",
+  "section_2",
+  "help_text",
+  "applies_when"
+ ],
+ "fields": [
+  {
+   "description": "Used in conditions, e.g. keeps_stock. Lower case, no spaces.",
+   "fieldname": "question_key",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Key",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Question",
+   "reqd": 1
+  },
+  {
+   "description": "Questions are shown grouped under this heading.",
+   "fieldname": "section_title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Group"
+  },
+  {
+   "fieldname": "sequence",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Sequence"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Yes / No",
+   "fieldname": "answer_type",
+   "fieldtype": "Select",
+   "label": "Answer Type",
+   "options": "Yes / No\nOne choice\nSeveral choices\nNumber",
+   "reqd": 1
+  },
+  {
+   "description": "One per line, for a choice question. Written as: key | What the customer sees",
+   "fieldname": "choices",
+   "fieldtype": "Small Text",
+   "label": "Choices"
+  },
+  {
+   "default": "1",
+   "fieldname": "allow_not_sure",
+   "fieldtype": "Check",
+   "label": "Allow \"Not sure\""
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Active"
+  },
+  {
+   "fieldname": "section_2",
+   "fieldtype": "Section Break"
+  },
+  {
+   "description": "One short line under the question.",
+   "fieldname": "help_text",
+   "fieldtype": "Small Text",
+   "label": "Help"
+  },
+  {
+   "description": "Leave empty to always ask. Otherwise a condition on earlier answers, e.g. keeps_stock == yes",
+   "fieldname": "applies_when",
+   "fieldtype": "Data",
+   "label": "Ask When"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-22 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Embark",
+ "name": "Embark Question",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Embark Consultant",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "permlevel": 0,
+   "read": 1,
+   "role": "Embark Customer"
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "label",
+ "track_changes": 1
+}

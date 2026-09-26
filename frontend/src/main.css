@@ -1,0 +1,21 @@
+@import "frappe-ui/style.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+	html,
+	body,
+	#app {
+		@apply h-full bg-surface-white text-ink-gray-8;
+	}
+}
+
+/* frappe-ui's Select trigger is inline and sizes to its text; inside forms and
+   tables it should fill its column like the text inputs beside it. */
+@layer components {
+	.ft-fill [role="combobox"] {
+		@apply w-full;
+	}
+}

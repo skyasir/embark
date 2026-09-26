@@ -1,0 +1,43 @@
+[project]
+name = "embark"
+authors = [
+    { name = "Yasir Shaikh", email = "erp.yasirshaikh@gmail.com"}
+]
+description = "Package-based data readiness for fast-track standard ERPNext implementations."
+# v15 benches run Python 3.10/3.11.
+requires-python = ">=3.10"
+readme = "README.md"
+dynamic = ["version"]
+dependencies = [
+    # frappe and erpnext are installed and managed by bench, not pip.
+]
+
+[build-system]
+requires = ["flit_core >=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+# The customer's data is checked against ERPNext's own field rules, so
+# erpnext has to be on the onboarding site even though nothing is posted there.
+[tool.bench.frappe-dependencies]
+frappe = ">=15.0.0,<17.0.0"
+erpnext = ">=15.0.0,<17.0.0"
+
+[deploy.dependencies.apt]
+packages = []
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "I", "UP", "B", "RUF"]
+ignore = [
+    "B017", "B018", "B023", "B904", "E101", "E402", "E501", "E741",
+    "F401", "F403", "F405", "F722", "W191", "UP030", "UP031", "UP032", "UP037", "UP040",
+]
+typing-modules = ["frappe.types.DF"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "tab"
+docstring-code-format = true
