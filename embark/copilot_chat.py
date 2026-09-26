@@ -31,9 +31,9 @@ SYSTEM_PROMPT = """You are the Embark Studio copilot. You change an ERPNext site
 
 How to work:
 - Look before you change: describe_doctype tells you what fields a form already has, and what to put a new field after.
-- Build the change with add_field, set_property or create_report. Each call adds one change to the set you are composing; it does not touch the site.
+- Build the change with add_field, set_property, create_report, create_workflow or create_client_script. Each call adds one change to the set you are composing; it does not touch the site.
 - When the set is complete, call propose with a short title. The consultant reviews it and presses Apply. Say in one sentence what you proposed.
-- You can only change fields, form properties and reports. Anything else — invoices, stock, customers, users — is out of reach, and you should say so plainly rather than pretend.
+- You can only change fields, form properties, reports, workflows and client scripts. Anything else — invoices, stock, customers, users — is out of reach, and you should say so plainly rather than pretend.
 - If the request is unclear, ask one question instead of guessing. A wrong change on a live site costs the consultant time.
 
 Keep replies to two or three sentences."""
@@ -98,6 +98,37 @@ TOOLS = [
 				},
 			},
 			"required": ["title", "ref_doctype", "query"],
+		},
+	},
+	{
+		"name": "create_workflow",
+		"description": (
+			"A workflow: the states a document moves through and who may move it. "
+			"States are [{state, role, doc_status}], transitions [{state, action, next_state, role}]. "
+			"doc_status is 0 draft, 1 submitted, 2 cancelled."
+		),
+		"parameters": {
+			"type": "object",
+			"properties": {
+				"doctype": {"type": "string"},
+				"title": {"type": "string", "description": "What the workflow is called."},
+				"states": {"type": "array", "items": {"type": "object"}},
+				"transitions": {"type": "array", "items": {"type": "object"}},
+			},
+			"required": ["doctype", "title", "states"],
+		},
+	},
+	{
+		"name": "create_client_script",
+		"description": "A script that runs on a form, for example to set a field or show a message.",
+		"parameters": {
+			"type": "object",
+			"properties": {
+				"doctype": {"type": "string"},
+				"script": {"type": "string", "description": "JavaScript, as in Client Script."},
+				"view": {"type": "string", "description": "Form or List."},
+			},
+			"required": ["doctype", "script"],
 		},
 	},
 	{
@@ -223,6 +254,19 @@ def _run_tool(name: str, arguments: dict, pending: list[dict], request: str):
 				prop=arguments.get("prop"),
 				value=arguments.get("value"),
 			)
+		elif name == "create_workflow":
+			change = copilot.create_workflow(
+				doctype=arguments.get("doctype"),
+				title=arguments.get("title"),
+				states=arguments.get("states"),
+				transitions=arguments.get("transitions"),
+			)
+		elif name == "create_client_script":
+			change = copilot.create_client_script(
+				doctype=arguments.get("doctype"),
+				script=arguments.get("script"),
+				view=arguments.get("view") or "Form",
+			)
 		elif name == "create_report":
 			change = copilot.create_report(
 				title=arguments.get("title"),
@@ -240,8 +284,11 @@ def _run_tool(name: str, arguments: dict, pending: list[dict], request: str):
 		# Hand the model its mistake, in its own words, so it can correct itself.
 		return {"error": str(e)}, None
 
-	pending.append(change)
-	return {"added": change["summary"]}, None
+	# A workflow needs its states and actions to exist first, so a builder may
+	# hand back several changes at once.
+	changes = change if isinstance(change, list) else [change]
+	pending.extend(changes)
+	return {"added": [c["summary"] for c in changes]}, None
 
 
 def _describe(doctype: str) -> dict:

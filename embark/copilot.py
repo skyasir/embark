@@ -148,6 +148,129 @@ def create_report(title: str, ref_doctype: str, query: str, is_standard: str = "
 	}
 
 
+def create_workflow(
+	doctype: str,
+	title: str,
+	states: list | str,
+	transitions: list | str | None = None,
+	field: str = "workflow_state",
+) -> dict:
+	"""A workflow: the states a document moves through, and who may move it.
+
+	``states`` is a list of {state, role, doc_status?}; ``transitions`` a list of
+	{state, action, next_state, role}. Frappe creates the state field itself.
+	"""
+	if not frappe.db.exists("DocType", doctype):
+		frappe.throw(_("There is no doctype called {0}.").format(doctype))
+	states = frappe.parse_json(states) if isinstance(states, str) else states
+	transitions = frappe.parse_json(transitions) if isinstance(transitions, str) else (transitions or [])
+	if not states:
+		frappe.throw(_("A workflow needs at least one state."))
+	if frappe.db.exists("Workflow", title):
+		frappe.throw(_("There is already a workflow called {0}.").format(title))
+
+	rows, seen_states, seen_actions = [], set(), set()
+	for s in states:
+		name = (s.get("state") or "").strip()
+		role = (s.get("role") or "System Manager").strip()
+		_check_role(role)
+		if not name:
+			frappe.throw(_("Every state needs a name."))
+		seen_states.add(name)
+	for tr in transitions:
+		_check_role((tr.get("role") or "System Manager").strip())
+		seen_states.update(filter(None, [tr.get("state"), tr.get("next_state")]))
+		if tr.get("action"):
+			seen_actions.add(tr["action"].strip())
+
+	# The states and actions a workflow refers to have to exist first.
+	for state in sorted(seen_states):
+		if not frappe.db.exists("Workflow State", state):
+			rows.append(
+				{
+					"action": "Create",
+					"ref_doctype": "Workflow State",
+					"ref_name": state,
+					"summary": _("State: {0}").format(state),
+					"payload": json.dumps({"workflow_state_name": state}),
+				}
+			)
+	for action in sorted(seen_actions):
+		if not frappe.db.exists("Workflow Action Master", action):
+			rows.append(
+				{
+					"action": "Create",
+					"ref_doctype": "Workflow Action Master",
+					"ref_name": action,
+					"summary": _("Action: {0}").format(action),
+					"payload": json.dumps({"workflow_action_name": action}),
+				}
+			)
+
+	rows.append(
+		{
+			"action": "Create",
+			"ref_doctype": "Workflow",
+			"ref_name": title,
+			"summary": _("Workflow on {0}: {1}").format(
+				doctype, " → ".join(s.get("state", "") for s in states)
+			),
+			"payload": json.dumps(
+				{
+					"workflow_name": title,
+					"document_type": doctype,
+					"workflow_state_field": field,
+					"is_active": 1,
+					"send_email_alert": 0,
+					"states": [
+						{
+							"state": s.get("state"),
+							"allow_edit": s.get("role") or "System Manager",
+							"doc_status": str(s.get("doc_status", 0)),
+						}
+						for s in states
+					],
+					"transitions": [
+						{
+							"state": tr.get("state"),
+							"action": tr.get("action"),
+							"next_state": tr.get("next_state"),
+							"allowed": tr.get("role") or "System Manager",
+							"allow_self_approval": 1,
+						}
+						for tr in transitions
+					],
+				}
+			),
+		}
+	)
+	return rows if len(rows) > 1 else rows[0]
+
+
+def create_client_script(doctype: str, script: str, view: str = "Form", name: str | None = None) -> dict:
+	"""A Client Script: what happens on the form as someone fills it in."""
+	if not frappe.db.exists("DocType", doctype):
+		frappe.throw(_("There is no doctype called {0}.").format(doctype))
+	if view not in ("Form", "List"):
+		frappe.throw(_("A client script runs on a Form or a List."))
+	if not (script or "").strip():
+		frappe.throw(_("The script is empty."))
+
+	name = name or f"{doctype}-{frappe.scrub(view)}-copilot"
+	return {
+		"action": "Create",
+		"ref_doctype": "Client Script",
+		"ref_name": name,
+		"summary": _("Client script on {0} ({1})").format(doctype, view),
+		"payload": json.dumps({"name": name, "dt": doctype, "view": view, "enabled": 1, "script": script}),
+	}
+
+
+def _check_role(role: str) -> None:
+	if not frappe.db.exists("Role", role):
+		frappe.throw(_("There is no role called {0}.").format(role))
+
+
 def _resolve(meta, field: str) -> str:
 	"""Take a fieldname, or the label someone reads on the form."""
 	if meta.get_field(field):
@@ -171,6 +294,9 @@ def propose(title: str, request: str = "", changes: str | list | None = None) ->
 	"""Write a change set down. Nothing happens to the site until it is applied."""
 	_staff()
 	rows = frappe.parse_json(changes) or []
+	# A builder hands back one change, or several when one implies others.
+	if isinstance(rows, dict):
+		rows = [rows]
 	if not rows:
 		frappe.throw(_("A change set needs at least one change."))
 
