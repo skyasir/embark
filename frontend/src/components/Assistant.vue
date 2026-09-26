@@ -31,6 +31,35 @@
 					<div v-if="m.role === 'user'" class="ml-8 rounded-lg bg-surface-gray-2 px-3 py-2 text-ink-gray-8">
 						{{ m.content }}
 					</div>
+
+					<!-- What it did on the way: one row per tool call, openable. -->
+					<details v-else-if="m.role === 'step'" class="rounded-lg border border-outline-gray-2">
+						<summary class="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm text-ink-gray-7">
+							<span class="flex-1 truncate font-mono">{{ m.step.tool }}</span>
+							<span :class="m.step.failed ? 'text-ink-red-3' : 'text-ink-gray-4'">
+								{{ m.step.failed ? "Failed" : "Done" }}
+							</span>
+						</summary>
+						<pre class="overflow-x-auto whitespace-pre-wrap border-t border-outline-gray-1 px-3 py-2 text-sm text-ink-gray-6">{{ detail(m.step) }}</pre>
+					</details>
+
+					<!-- A change to this site: nothing happens until it is applied. -->
+					<div v-else-if="m.role === 'change'" class="rounded-lg border border-outline-gray-2">
+						<div class="flex items-center gap-2 border-b border-outline-gray-1 bg-surface-gray-1 px-3 py-2">
+							<span class="flex-1 truncate text-sm font-medium text-ink-gray-8">{{ m.set.title }}</span>
+							<Badge :theme="m.set.status === 'Applied' ? 'green' : 'gray'" :label="m.set.status" size="sm" />
+						</div>
+						<ul class="list-disc space-y-1 px-3 py-2 pl-7 text-sm text-ink-gray-7">
+							<li v-for="(c, j) in m.set.changes" :key="j">{{ c.summary }}</li>
+						</ul>
+						<div class="flex gap-2 border-t border-outline-gray-1 px-3 py-2">
+							<Button v-if="m.set.status !== 'Applied'" size="sm" :loading="m.busy" @click="run(m, 'apply')">
+								Apply
+							</Button>
+							<Button v-else size="sm" :loading="m.busy" @click="run(m, 'undo')">Undo</Button>
+						</div>
+					</div>
+
 					<div v-else class="mr-4 whitespace-pre-line text-ink-gray-8">{{ m.content }}</div>
 				</div>
 
@@ -78,9 +107,9 @@
 
 <script setup>
 import { computed, nextTick, ref } from "vue"
-import { Button, FeatherIcon, LoadingIndicator, toast } from "frappe-ui"
+import { Badge, Button, FeatherIcon, LoadingIndicator, toast } from "frappe-ui"
 
-import { api, errorText } from "../data/api"
+import { api, callMethod, errorText } from "../data/api"
 import { setOverview, state } from "../data/store"
 
 const EXAMPLES = [
@@ -110,7 +139,10 @@ async function send(text) {
 			// Only the plain turns: the server rebuilds its own tool context.
 			history: JSON.stringify(messages.value.slice(-10, -1)),
 		})
-		messages.value.push({ role: "assistant", content: result.reply })
+		// Everything it did, in the order it did it.
+		;(result.steps || []).forEach((step) => messages.value.push({ role: "step", step }))
+		if (result.reply) messages.value.push({ role: "assistant", content: result.reply })
+		if (result.change_set) messages.value.push({ role: "change", set: result.change_set, busy: false })
 		// Answers it saved change the checklist behind the panel.
 		if (result.overview) setOverview(result.overview)
 	} catch (e) {
@@ -119,6 +151,23 @@ async function send(text) {
 	} finally {
 		busy.value = false
 		await scrollDown()
+	}
+}
+
+function detail(step) {
+	return JSON.stringify(step.arguments || {}, null, 2) + "\n\n" + (step.outcome || "")
+}
+
+async function run(message, action) {
+	message.busy = true
+	try {
+		const out = await callMethod(`embark.copilot.${action}`, { name: message.set.name })
+		message.set.status = out.status
+		toast.success(out.status === "Applied" ? "Applied" : "Undone")
+	} catch (e) {
+		toast.error(errorText(e))
+	} finally {
+		message.busy = false
 	}
 }
 
