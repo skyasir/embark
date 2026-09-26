@@ -27,6 +27,12 @@ from embark import copilot
 MAX_ROUNDS = 8
 TIMEOUT = 120
 
+# A screenshot of a form is worth a paragraph of description, but a chat is not
+# a file upload: a few, and small.
+MAX_IMAGES = 4
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+IMAGE_TYPES = ("image/png", "image/jpeg", "image/gif", "image/webp")
+
 SYSTEM_PROMPT = """You are the Embark Studio copilot. You change an ERPNext site for a consultant, by proposing changes they then apply.
 
 How to work:
@@ -167,14 +173,14 @@ def status() -> dict:
 
 
 @frappe.whitelist()
-def chat(message: str, history: str | list | None = None) -> dict:
+def chat(message: str, history: str | list | None = None, images: str | list | None = None) -> dict:
 	"""One turn. Returns what to say, and the change set if one was proposed."""
 	copilot._studio_user()
 	if not status()["on"]:
 		frappe.throw(_("No AI is configured on this bench yet."))
 
 	messages = list(frappe.parse_json(history) or [])
-	messages.append({"role": "user", "content": message})
+	messages.append(_user_message(message, _check_images(images)))
 
 	pending: list[dict] = []
 	errors: list[str] = []
@@ -228,6 +234,48 @@ def chat(message: str, history: str | list | None = None) -> dict:
 				}
 
 	return {"reply": _("I could not work that out. Could you say it more simply?"), "change_set": None}
+
+
+def _check_images(images: str | list | None) -> list[str]:
+	"""Data URLs the page collected, checked before they go anywhere."""
+	items = frappe.parse_json(images) if isinstance(images, str) else (images or [])
+	if not items:
+		return []
+	if len(items) > MAX_IMAGES:
+		frappe.throw(_("Up to {0} images at a time.").format(MAX_IMAGES))
+	for url in items:
+		if not isinstance(url, str) or not url.startswith("data:"):
+			frappe.throw(_("That is not an image."))
+		media_type = url[5 : url.find(";")]
+		if media_type not in IMAGE_TYPES:
+			frappe.throw(_("{0} is not an image type this reads.").format(media_type or "?"))
+		if len(url) * 3 // 4 > MAX_IMAGE_BYTES:
+			frappe.throw(
+				_("That image is too big — {0} MB is the limit.").format(MAX_IMAGE_BYTES // 1024 // 1024)
+			)
+	return items
+
+
+def _user_message(message: str, images: list[str]) -> dict:
+	"""What the customer said, with any images beside it, in the provider's shape."""
+	if not images:
+		return {"role": "user", "content": message}
+
+	if config()["provider"] == "Anthropic":
+		blocks = [
+			{
+				"type": "image",
+				"source": {
+					"type": "base64",
+					"media_type": url[5 : url.find(";")],
+					"data": url.split(",", 1)[1],
+				},
+			}
+			for url in images
+		]
+	else:
+		blocks = [{"type": "image_url", "image_url": {"url": url}} for url in images]
+	return {"role": "user", "content": [{"type": "text", "text": message}, *blocks]}
 
 
 def _title(request: str) -> str:
