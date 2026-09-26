@@ -605,3 +605,57 @@
 .fvs-dark .fvs-changeset-head {
 	background: #1e1e1e;
 }
+
+/* Images in the composer: a strip of thumbnails above what you type. */
+.fvs-composer-images {
+	display: none;  /* toggled to flex by the page */
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-bottom: 8px;
+}
+
+.fvs-thumb {
+	position: relative;
+	display: inline-flex;
+}
+
+.fvs-thumb img {
+	width: 44px;
+	height: 44px;
+	object-fit: cover;
+	border-radius: 6px;
+	border: 1px solid var(--fvs-border, #e2e2e2);
+}
+
+.fvs-thumb-x {
+	position: absolute;
+	top: -6px;
+	right: -6px;
+	width: 16px;
+	height: 16px;
+	border: 0;
+	border-radius: 50%;
+	background: var(--fvs-border, #dcdcdc);
+	color: inherit;
+	font-size: 9px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.fvs-composer-hint {
+	font-size: 11px;
+	opacity: 0.45;
+	margin-top: 2px;
+}
+
+.fvs-composer-over {
+	border-style: dashed;
+	border-color: var(--fvs-muted, #8f9296);
+}
+
+.fvs-said-img {
+	display: block;
+	max-width: 100%;
+	margin-top: 6px;
+	border-radius: 6px;
+}

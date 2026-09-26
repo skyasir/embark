@@ -81,6 +81,22 @@ class TestCopilot(FrappeTestCase):
 		change = copilot.create_client_script("Item", "frappe.ui.form.on('Item', {});")
 		self.assertEqual(change["ref_doctype"], "Client Script")
 
+	def test_an_image_has_to_be_an_image(self):
+		from embark import copilot_chat
+
+		png = "data:image/png;base64,iVBORw0KGgo="
+		self.assertEqual(copilot_chat._check_images([png]), [png])
+		self.assertEqual(copilot_chat._check_images(None), [])
+		self.assertRaises(frappe.ValidationError, copilot_chat._check_images, ["https://example.com/a.png"])
+		self.assertRaises(frappe.ValidationError, copilot_chat._check_images, ["data:text/html;base64,PGI+"])
+		self.assertRaises(frappe.ValidationError, copilot_chat._check_images, [png] * 5)
+
+		# Each provider wants them in its own shape.
+		message = copilot_chat._user_message("look at this", [png])
+		self.assertEqual(message["content"][0], {"type": "text", "text": "look at this"})
+		self.assertIn(message["content"][1]["type"], ("image_url", "image"))
+		self.assertEqual(copilot_chat._user_message("no images", [])["content"], "no images")
+
 	def test_it_refuses_what_it_should_not_touch(self):
 		# Business data is out of reach, whatever the model asks for.
 		self.assertRaises(

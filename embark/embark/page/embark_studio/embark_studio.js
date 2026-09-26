@@ -164,8 +164,10 @@ frappe.embark_studio.Workbench = class Workbench {
 					<div class="fvs-copilot-log"></div>
 					<div class="fvs-copilot-composer">
 						<div class="fvs-composer-box">
+							<div class="fvs-composer-images"></div>
 							<textarea class="fvs-copilot-input" rows="2" spellcheck="false"
 								placeholder="${__("Ask to change this site…")}"></textarea>
+							<div class="fvs-composer-hint">${__("Paste or drop an image")}</div>
 							<div class="fvs-composer-foot">
 								<span class="fvs-composer-model" title="${__("The model answering")}"></span>
 								<button class="fvs-send-btn fvs-copilot-send" title="${__("Send")}"
@@ -194,6 +196,19 @@ frappe.embark_studio.Workbench = class Workbench {
 
 		this.$root.find(".fvs-copilot-close").on("click", () => this.toggle_copilot(false));
 		this.$root.find(".fvs-copilot-send").on("click", () => this.copilot_send());
+		this.copilot_images = [];
+		this.$copilot_images = this.$root.find(".fvs-composer-images");
+		this.$copilot_input.on("paste", (e) => this.copilot_take_files(e.originalEvent.clipboardData));
+		const $box = this.$root.find(".fvs-composer-box");
+		$box.on("dragover", (e) => {
+			e.preventDefault();
+			$box.addClass("fvs-composer-over");
+		});
+		$box.on("dragleave drop", () => $box.removeClass("fvs-composer-over"));
+		$box.on("drop", (e) => {
+			e.preventDefault();
+			this.copilot_take_files(e.originalEvent.dataTransfer);
+		});
 		this.$copilot_input.on("keydown", (e) => {
 			// Enter sends; Shift+Enter is a new line, as everywhere else.
 			if (e.key === "Enter" && !e.shiftKey) {
@@ -259,6 +274,41 @@ frappe.embark_studio.Workbench = class Workbench {
 		}
 	}
 
+	copilot_take_files(source) {
+		const files = [...((source && source.files) || [])].filter((f) => f.type.startsWith("image/"));
+		if (!files.length) return;
+		files.slice(0, 4 - this.copilot_images.length).forEach((file) => {
+			if (file.size > 5 * 1024 * 1024) {
+				frappe.show_alert({ message: __("That image is too big (5 MB max)."), indicator: "orange" });
+				return;
+			}
+			const reader = new FileReader();
+			reader.onload = () => {
+				this.copilot_images.push(reader.result);
+				this.copilot_render_images();
+			};
+			reader.readAsDataURL(file);
+		});
+	}
+
+	copilot_render_images() {
+		this.$copilot_images.empty().toggle(!!this.copilot_images.length);
+		this.copilot_images.forEach((src, i) => {
+			const $thumb = $(`
+				<span class="fvs-thumb">
+					<img alt="" />
+					<button class="fvs-thumb-x" title="${__("Remove")}" aria-label="${__("Remove")}">✕</button>
+				</span>
+			`);
+			$thumb.find("img").attr("src", src);
+			$thumb.find(".fvs-thumb-x").on("click", () => {
+				this.copilot_images.splice(i, 1);
+				this.copilot_render_images();
+			});
+			this.$copilot_images.append($thumb);
+		});
+	}
+
 	copilot_say(role, text) {
 		const $row = $(`<div class="fvs-copilot-msg fvs-copilot-${role}"></div>`).text(text);
 		this.$copilot_log.append($row);
@@ -268,16 +318,21 @@ frappe.embark_studio.Workbench = class Workbench {
 
 	async copilot_send() {
 		const message = (this.$copilot_input.val() || "").trim();
-		if (!message || this.copilot_busy) return;
+		if ((!message && !this.copilot_images.length) || this.copilot_busy) return;
 		this.copilot_busy = true;
+		const images = this.copilot_images;
+		this.copilot_images = [];
+		this.copilot_render_images();
 		this.$copilot_input.val("");
-		this.copilot_say("user", message);
+		const $said = this.copilot_say("user", message || __("(image)"));
+		images.forEach((src) => $said.append($("<img class='fvs-said-img' alt='' />").attr("src", src)));
 		const $thinking = this.copilot_say("system", __("Thinking…"));
 
 		try {
 			const result = await frappe.xcall("embark.copilot_chat.chat", {
 				message,
 				history: JSON.stringify(this.copilot_history.slice(-8)),
+				images: JSON.stringify(images),
 			});
 			$thinking.remove();
 			if (result.reply) this.copilot_say("bot", result.reply);
