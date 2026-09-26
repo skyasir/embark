@@ -4,9 +4,13 @@
 		<ConsultantPanel v-if="o.is_staff" :o="o" />
 		<div>
 			<h1 class="text-2xl font-semibold text-ink-gray-9">Let's get {{ o.client_name }} ready for ERPNext</h1>
-			<p class="mt-2 text-base leading-relaxed text-ink-gray-6">
+			<p v-if="planned" class="mt-2 text-base leading-relaxed text-ink-gray-6">
 				Work through the steps below. We check your data as you go, so setting up ERPNext goes quickly
 				instead of turning into spreadsheet archaeology.
+			</p>
+			<p v-else class="mt-2 text-base leading-relaxed text-ink-gray-6">
+				Start with a few questions about how you work. Your answers decide what we set up and what we
+				need from you — so you are never asked for data your business doesn't use.
 			</p>
 		</div>
 
@@ -24,7 +28,13 @@
 			<strong>All set.</strong> Your data has been approved and is ready for the implementation.
 		</Callout>
 
-		<div class="rounded-lg border border-outline-gray-2 p-5">
+		<Callout v-if="!planned" tone="info" icon="list">
+			<strong>Your checklist comes from your answers.</strong>
+			Finish the questions and the steps below will be the ones your business actually needs —
+			nothing more.
+		</Callout>
+
+		<div v-else class="rounded-lg border border-outline-gray-2 p-5">
 			<div class="mb-3 flex items-end justify-between gap-4">
 				<div>
 					<div class="text-base text-ink-gray-6">Readiness</div>
@@ -77,6 +87,7 @@
 				<template v-if="o.status === 'Submitted'">The data has been sent for review.</template>
 				<template v-else-if="o.status === 'Approved'">The data has been approved.</template>
 				<template v-else-if="o.can_submit">Everything required is ready.</template>
+				<template v-else-if="!planned">Answer the questions first, then we'll know what to ask you for.</template>
 				<template v-else>Finish every required step to send your data for review.</template>
 			</p>
 			<Button
@@ -108,6 +119,9 @@ import { loadOverview, setOverview, state } from "../data/store"
 
 const o = computed(() => state.overview)
 const submitting = ref(false)
+
+// The checklist is built once the interview is answered, not before.
+const planned = computed(() => o.value.steps.length > 0)
 
 const interviewStatus = computed(() =>
 	o.value.interview.done ? "Ready" : o.value.interview.answered ? "In Progress" : "Not Started"

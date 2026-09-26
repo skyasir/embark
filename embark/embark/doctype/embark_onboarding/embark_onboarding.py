@@ -38,17 +38,23 @@ class EmbarkOnboarding(Document):
 	def sync_areas(self):
 		"""The answers decide which steps this customer is asked for.
 
-		A step the customer has already uploaded to is kept even if their answers
-		later say it does not apply, so nothing they did quietly disappears.
+		There is no checklist until the interview has been answered: the steps are
+		built from the answers, not trimmed from a standard list. A step the
+		customer has already uploaded to is kept even if their answers later say it
+		does not apply, so nothing they did quietly disappears.
 		"""
 		answers = self.answer_map()
 		existing = {row.data_area: row for row in self.areas}
+		# Once the checklist exists it keeps up with the answers; before that it
+		# takes a finished interview to build one, so a half-answered interview
+		# never shows a standard list of steps.
+		planned = bool(self.areas) or self.interview()["done"]
 		wanted = []
 		for area in frappe.get_all(
 			"Embark Data Area", fields=["name", "required", "applies_when"], order_by="sequence asc"
 		):
 			kept = existing.get(area.name)
-			if applies(area.applies_when, answers) or (kept and kept.upload):
+			if (planned and applies(area.applies_when, answers)) or (kept and kept.upload):
 				wanted.append(area)
 
 		self.set("areas", [])
