@@ -26,9 +26,8 @@ def recovered_calls(text: str) -> list[dict]:
 		return []
 
 	for candidate in _candidates(text):
-		try:
-			data = json.loads(candidate)
-		except ValueError:
+		data = _parse(candidate)
+		if data is None:
 			continue
 		for call in data if isinstance(data, list) else [data]:
 			if not isinstance(call, dict) or not call.get("name"):
@@ -41,6 +40,33 @@ def recovered_calls(text: str) -> list[dict]:
 					arguments = {}
 			return [{"id": f"recovered-{call['name']}", "name": call["name"], "arguments": arguments}]
 	return []
+
+
+def _parse(candidate: str):
+	"""JSON, or the nearest thing to it a small model produces.
+
+	The common mangling is a nested object wrapped in quotes and then not
+	escaped — ``"answers":"{"keeps_stock":"yes"}}`` — which no parser accepts
+	but which means something obvious.
+	"""
+	for attempt in (candidate, _unwrap(candidate)):
+		try:
+			return json.loads(attempt)
+		except ValueError:
+			continue
+	return None
+
+
+def _unwrap(candidate: str) -> str:
+	"""Drop the quotes that were put around a nested object, and balance it."""
+	repaired = re.sub(r':\s*"\s*\{', ": {", candidate)
+	repaired = re.sub(r'\}\s*"', "}", repaired)
+	opens, closes = repaired.count("{"), repaired.count("}")
+	if closes > opens:
+		repaired = repaired[: -(closes - opens)]
+	elif opens > closes:
+		repaired += "}" * (opens - closes)
+	return repaired
 
 
 def _candidates(text: str) -> list[str]:
