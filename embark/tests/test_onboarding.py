@@ -402,6 +402,21 @@ class TestOnboardingFlow(TestCase):
 		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
 		self.assertEqual(doc.answer_map()["keeps_stock"], "no")
 
+	def test_only_what_was_said_goes_back_to_the_model(self):
+		"""The panel draws tool steps beside the talk; they are not conversation."""
+		history = [
+			{"role": "user", "content": "hello"},
+			{"role": "step", "step": {"tool": "open_questions"}},
+			{"role": "assistant", "content": "What do you sell?"},
+			{"role": "change", "set": {"name": "CHG-0001"}},
+			{"role": "assistant", "content": ""},
+		]
+		self.assertEqual(
+			assistant._conversation(history),
+			[{"role": "user", "content": "hello"}, {"role": "assistant", "content": "What do you sell?"}],
+		)
+		self.assertEqual(assistant._conversation(None), [])
+
 	def test_assistant_answers_the_interview_and_nothing_else(self):
 		from unittest.mock import patch
 
