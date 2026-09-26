@@ -40,24 +40,45 @@
 				</div>
 			</div>
 
-			<form class="ft-fill shrink-0 border-t border-outline-gray-1 p-3" @submit.prevent="send(draft)">
-				<div class="flex gap-2">
-					<FormControl
+			<!-- One rounded box: what you type, and underneath it what is answering
+			     and the button that sends it. -->
+			<div class="shrink-0 border-t border-outline-gray-1 p-3">
+				<div
+					class="rounded-xl border bg-surface-white px-3 pb-2 pt-2.5 transition-colors"
+					:class="focused ? 'border-outline-gray-3' : 'border-outline-gray-2'"
+				>
+					<textarea
 						v-model="draft"
-						class="flex-1"
+						rows="2"
+						class="block w-full resize-none border-0 bg-transparent p-0 text-base leading-relaxed text-ink-gray-8 placeholder:text-ink-gray-4 focus:outline-none focus:ring-0"
 						placeholder="We sell tiles wholesale from 3 godowns…"
 						:disabled="busy"
+						@focus="focused = true"
+						@blur="focused = false"
+						@keydown.enter.exact.prevent="send(draft)"
 					/>
-					<Button variant="solid" icon="arrow-up" label="Send" :disabled="busy || !draft.trim()" @click="send(draft)" />
+					<div class="mt-1.5 flex items-center gap-2">
+						<span class="min-w-0 flex-1 truncate text-sm text-ink-gray-4">
+							{{ o.assistant_model || "Embark" }}
+						</span>
+						<button
+							class="flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-gray-3 text-ink-gray-8 transition-colors hover:bg-surface-gray-4 disabled:opacity-40"
+							:disabled="busy || !draft.trim()"
+							aria-label="Send"
+							@click="send(draft)"
+						>
+							<FeatherIcon name="arrow-up" class="size-4" />
+						</button>
+					</div>
 				</div>
-			</form>
+			</div>
 		</aside>
 	</div>
 </template>
 
 <script setup>
 import { computed, nextTick, ref } from "vue"
-import { Button, FeatherIcon, FormControl, LoadingIndicator, toast } from "frappe-ui"
+import { Button, FeatherIcon, LoadingIndicator, toast } from "frappe-ui"
 
 import { api, errorText } from "../data/api"
 import { setOverview, state } from "../data/store"
@@ -71,6 +92,7 @@ const EXAMPLES = [
 const o = computed(() => state.overview)
 const draft = ref("")
 const busy = ref(false)
+const focused = ref(false)
 const messages = ref([])
 const scroller = ref(null)
 
