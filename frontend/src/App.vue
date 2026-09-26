@@ -71,7 +71,7 @@
 					</Tooltip>
 					<Tooltip :text="collapsed ? 'Configure AI' : ''" placement="right">
 						<button
-							v-if="overview.is_staff"
+							v-if="overview.can_configure_ai"
 							class="flex h-8 w-full items-center gap-2 rounded text-base text-ink-gray-7 hover:bg-surface-gray-2"
 							:class="collapsed ? 'justify-center px-0' : 'px-2'"
 							@click="aiOpen = true"
@@ -190,7 +190,7 @@ const appMenu = computed(() => [
 				},
 			]
 		: []),
-	...(overview.value?.is_staff
+	...(overview.value?.can_configure_ai
 		? [{ label: "Configure AI", icon: "cpu", onClick: () => (aiOpen.value = true) }]
 		: []),
 	...(overview.value?.can_use_desk
