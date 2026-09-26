@@ -335,6 +335,7 @@ frappe.embark_studio.Workbench = class Workbench {
 				images: JSON.stringify(images),
 			});
 			$thinking.remove();
+			(result.steps || []).forEach((step) => this.copilot_render_step(step));
 			if (result.reply) this.copilot_say("bot", result.reply);
 			this.copilot_history.push({ role: "user", content: message });
 			if (result.reply) this.copilot_history.push({ role: "assistant", content: result.reply });
@@ -345,6 +346,31 @@ frappe.embark_studio.Workbench = class Workbench {
 		} finally {
 			this.copilot_busy = false;
 		}
+	}
+
+	copilot_render_step(step) {
+		// One row per tool call, the detail folded away behind it.
+		const $row = $(`
+			<div class="fvs-step ${step.failed ? "fvs-step-failed" : ""}">
+				<button class="fvs-step-head">
+					<span class="fvs-step-arrow">›</span>
+					<span class="fvs-step-tool"></span>
+					<span class="fvs-step-outcome"></span>
+				</button>
+				<div class="fvs-step-body" style="display:none"><pre></pre></div>
+			</div>
+		`);
+		$row.find(".fvs-step-tool").text(step.tool);
+		$row.find(".fvs-step-outcome").text(step.failed ? __("Failed") : __("Done"));
+		$row.find("pre").text(JSON.stringify(step.arguments || {}, null, 2) + "\n\n" + (step.outcome || ""));
+		$row.find(".fvs-step-head").on("click", () => {
+			const $body = $row.find(".fvs-step-body");
+			const open = $body.is(":hidden");
+			$body.toggle(open);
+			$row.find(".fvs-step-arrow").text(open ? "⌄" : "›");
+		});
+		this.$copilot_log.append($row);
+		this.$copilot_log.scrollTop(this.$copilot_log[0].scrollHeight);
 	}
 
 	copilot_render_change_set(cs) {

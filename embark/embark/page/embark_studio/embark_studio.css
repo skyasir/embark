@@ -659,3 +659,66 @@
 	margin-top: 6px;
 	border-radius: 6px;
 }
+
+/* Each tool call as a row you can open, so the work is visible rather than
+   hidden behind a spinner. */
+.fvs-step {
+	margin-bottom: 6px;
+	border: 1px solid var(--fvs-border, #e2e2e2);
+	border-radius: 8px;
+	overflow: hidden;
+}
+
+.fvs-step-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 6px 10px;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 12px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.fvs-step-head:hover {
+	background: var(--fvs-hover-bg, #f4f4f4);
+}
+
+.fvs-step-arrow {
+	flex: 0 0 auto;
+	opacity: 0.5;
+}
+
+.fvs-step-tool {
+	flex: 1;
+	font-family: var(--fvs-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.fvs-step-outcome {
+	flex: 0 0 auto;
+	font-size: 11px;
+	opacity: 0.6;
+}
+
+.fvs-step-failed .fvs-step-outcome {
+	color: #b91c1c;
+	opacity: 1;
+}
+
+.fvs-step-body pre {
+	margin: 0;
+	padding: 8px 10px;
+	border-top: 1px solid var(--fvs-border, #e2e2e2);
+	background: var(--fvs-hover-bg, #fafafa);
+	font-size: 11px;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.fvs-dark .fvs-step-body pre {
+	background: #1b1b1b;
+}
