@@ -926,7 +926,23 @@ def seed():
 		else:
 			_fill_blanks(area)
 
+	_seed_studio_role()
 	_seed_desk()
+
+
+def _seed_studio_role():
+	"""The one role Embark defines: who may use Studio.
+
+	Embark itself has no roles — the site's System Managers use it. Studio is
+	different: it changes how the site works, which is the implementer's job,
+	and on their own site the customer is a System Manager too.
+	"""
+	from embark.copilot import STUDIO_ROLE
+
+	if not frappe.db.exists("Role", STUDIO_ROLE):
+		frappe.get_doc({"doctype": "Role", "role_name": STUDIO_ROLE, "desk_access": 1}).insert(
+			ignore_permissions=True
+		)
 
 
 def _seed_desk():

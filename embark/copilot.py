@@ -39,9 +39,19 @@ FIELDTYPES = (
 )
 
 
-def _staff():
-	if "System Manager" not in frappe.get_roles() and frappe.session.user != "Administrator":
-		frappe.throw(_("Only System Managers can change this site."), frappe.PermissionError)
+# Studio changes a site's customisations, which is implementation work, not
+# something the site's own users do. A System Manager is not enough: the
+# customer is one of those on their own site.
+STUDIO_ROLE = "Embark Studio"
+
+
+def _studio_user():
+	if frappe.session.user == "Administrator" or STUDIO_ROLE in frappe.get_roles():
+		return
+	frappe.throw(
+		_("Embark Studio is for whoever implements this site, not for its users."),
+		frappe.PermissionError,
+	)
 
 
 def add_field(
@@ -292,7 +302,7 @@ def _last_field(meta) -> str | None:
 @frappe.whitelist()
 def propose(title: str, request: str = "", changes: str | list | None = None) -> dict:
 	"""Write a change set down. Nothing happens to the site until it is applied."""
-	_staff()
+	_studio_user()
 	rows = frappe.parse_json(changes) or []
 	# A builder hands back one change, or several when one implies others.
 	if isinstance(rows, dict):
@@ -313,7 +323,7 @@ def propose(title: str, request: str = "", changes: str | list | None = None) ->
 
 @frappe.whitelist()
 def apply(name: str) -> dict:
-	_staff()
+	_studio_user()
 	doc = frappe.get_doc("Embark Change Set", name)
 	doc.apply()
 	return _as_dict(doc.reload())
@@ -321,7 +331,7 @@ def apply(name: str) -> dict:
 
 @frappe.whitelist()
 def undo(name: str) -> dict:
-	_staff()
+	_studio_user()
 	doc = frappe.get_doc("Embark Change Set", name)
 	doc.undo()
 	return _as_dict(doc.reload())
@@ -329,7 +339,7 @@ def undo(name: str) -> dict:
 
 @frappe.whitelist()
 def history(limit: int = 20) -> list[dict]:
-	_staff()
+	_studio_user()
 	return frappe.get_all(
 		"Embark Change Set",
 		fields=["name", "title", "status", "applied_at", "applied_by"],

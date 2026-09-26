@@ -485,22 +485,81 @@
 }
 
 .fvs-copilot-composer {
-	display: flex;
-	gap: 6px;
-	padding: 8px;
-	border-top: 1px solid var(--fvs-border, #e2e2e2);
+	padding: 10px;
+}
+
+/* One rounded box holding what you type and, underneath it, what is answering
+   and the button that sends it. */
+.fvs-composer-box {
+	border: 1px solid var(--fvs-border, #e2e2e2);
+	border-radius: 12px;
+	padding: 8px 10px 6px;
+	background: var(--fvs-panel-bg, #fff);
+	transition: border-color 0.15s ease;
+}
+
+.fvs-composer-box:focus-within {
+	border-color: var(--fvs-muted, #8f9296);
 }
 
 .fvs-copilot-input {
-	flex: 1;
+	display: block;
+	width: 100%;
 	resize: none;
-	border: 1px solid var(--fvs-border, #e2e2e2);
-	border-radius: 6px;
-	padding: 6px 8px;
+	border: 0;
+	outline: none;
+	padding: 0;
 	font: inherit;
 	font-size: 13px;
+	line-height: 1.5;
 	background: transparent;
 	color: inherit;
+}
+
+.fvs-composer-foot {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 6px;
+}
+
+.fvs-composer-model {
+	flex: 1;
+	font-size: 11px;
+	opacity: 0.6;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.fvs-send-btn {
+	flex: 0 0 auto;
+	width: 26px;
+	height: 26px;
+	border: 0;
+	border-radius: 50%;
+	background: var(--fvs-hover-bg, #ededed);
+	color: inherit;
+	font-size: 14px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.fvs-send-btn:hover {
+	background: var(--fvs-border, #dcdcdc);
+}
+
+.fvs-send-btn:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.fvs-dark .fvs-composer-box {
+	background: #1b1b1b;
+}
+
+.fvs-dark .fvs-send-btn {
+	background: #333;
 }
 
 .fvs-changeset {

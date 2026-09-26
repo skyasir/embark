@@ -2,3 +2,4 @@
 
 [post_model_sync]
 embark.patches.v0_2.drop_packages_and_roles
+embark.patches.v0_3.lock_studio_to_the_implementer

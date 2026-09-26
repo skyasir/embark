@@ -12,7 +12,7 @@
  "page_name": "embark-studio",
  "roles": [
   {
-   "role": "System Manager"
+   "role": "Embark Studio"
   }
  ],
  "standard": "Yes",
