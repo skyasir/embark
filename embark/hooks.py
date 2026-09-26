@@ -3,7 +3,7 @@ app_title = "Embark"
 app_publisher = "Yasir Shaikh"
 app_description = "Package-based data readiness for fast-track standard ERPNext implementations."
 app_email = "erp.yasirshaikh@gmail.com"
-app_license = "mit"
+app_license = "agpl-3.0"  # Embark ships Flow's engine; see embark/vendor/flow
 required_apps = ["frappe/erpnext"]
 
 # Packages, data areas and the two roles are seed records, not fixtures:

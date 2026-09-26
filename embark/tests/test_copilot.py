@@ -97,6 +97,35 @@ class TestCopilot(FrappeTestCase):
 		self.assertIn(message["content"][1]["type"], ("image_url", "image"))
 		self.assertEqual(copilot_chat._user_message("no images", [])["content"], "no images")
 
+	def test_the_same_change_is_only_composed_once(self):
+		"""A small model repeats itself; the second copy would fail on the first."""
+		pending = []
+		change = copilot.add_field("Item", "PO Number", "Data")
+		self.assertEqual(copilot.add_change(pending, change), "Add PO Number (Data) to Item")
+		self.assertIn("Already", copilot.add_change(pending, change))
+		self.assertEqual(len(pending), 1)
+
+	def test_the_vendored_engine_is_wired_to_embark(self):
+		from pathlib import Path
+
+		from embark import copilot_flow
+		from embark.vendor.flow import Agent, model, tool
+
+		self.assertTrue(callable(Agent) and callable(tool))
+
+		# It reads Embark's own records, never Flow's, and needs no Flow app.
+		source = Path(model.__file__).read_text()
+		self.assertIn("Embark AI Model", source)
+		self.assertNotIn('"Flow Model"', source)
+		self.assertNotIn('"Flow Provider"', source)
+
+		model_record = frappe.db.get_value("Embark AI Model", {"enabled": 1}, "name")
+		if model_record:
+			self.assertEqual(copilot_flow.model_name(), model_record)
+
+		# And it stays off unless the site asks for it.
+		self.assertFalse(copilot_flow.available())
+
 	def test_it_refuses_what_it_should_not_touch(self):
 		# Business data is out of reach, whatever the model asks for.
 		self.assertRaises(
