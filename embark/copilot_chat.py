@@ -165,6 +165,10 @@ def config() -> dict:
 
 @frappe.whitelist()
 def status() -> dict:
+	# Studio's own status: what the customer runs is the onboarding chat, and
+	# that has its own switch.
+	copilot._studio_user()
+
 	from embark import copilot_flow
 
 	if copilot_flow.available():

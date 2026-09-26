@@ -133,6 +133,26 @@ class TestCopilot(FrappeTestCase):
 		self.assertRaises(frappe.ValidationError, copilot.set_property, "Item", "item_name", "label", None)
 		self.assertRaises(frappe.ValidationError, copilot.set_property, "Item", "item_name", "label", "")
 
+	def test_the_customer_cannot_reach_studio(self):
+		"""On their own site the customer is a System Manager — that is not enough."""
+		from embark import api, copilot_chat
+
+		user = frappe.db.get_value(
+			"User", {"enabled": 1, "user_type": "System User", "name": ("not in", ("Administrator", "Guest"))}, "name"
+		)
+		if not user or "Embark Studio" in frappe.get_roles(user):
+			self.skipTest("no non-Studio user on this site")
+
+		frappe.set_user(user)
+		try:
+			for call in (copilot_chat.status, api.ai_settings):
+				self.assertRaises(frappe.PermissionError, call)
+			self.assertRaises(frappe.PermissionError, copilot.propose, "x", "x", [])
+			self.assertFalse(frappe.has_permission("Embark Change Set", "read"))
+			self.assertFalse(frappe.has_permission("Embark Settings", "read"))
+		finally:
+			frappe.set_user("Administrator")
+
 	def test_it_refuses_what_it_should_not_touch(self):
 		# Business data is out of reach, whatever the model asks for.
 		self.assertRaises(

@@ -23,7 +23,7 @@
   },
   {
    "default": "OpenAI compatible",
-   "description": "\"OpenAI compatible\" covers OpenAI, Ollama, vLLM, LiteLLM and anything else that serves /chat/completions — including a Huf gateway.",
+   "description": "\"OpenAI compatible\" covers OpenAI, Ollama, vLLM, LiteLLM and anything else that serves /chat/completions \u2014 including a Huf gateway.",
    "fieldname": "provider",
    "fieldtype": "Select",
    "label": "Provider",
@@ -57,7 +57,7 @@
   {
    "fieldname": "help_html",
    "fieldtype": "HTML",
-   "options": "<p class=\"text-muted\">The assistant can only read the interview and save answers to it. It never writes to ERPNext, and it never decides the plan — the plan comes from the answers, by the same rules as before.</p>"
+   "options": "<p class=\"text-muted\">The assistant can only read the interview and save answers to it. It never writes to ERPNext, and it never decides the plan \u2014 the plan comes from the answers, by the same rules as before.</p>"
   }
  ],
  "index_web_pages_for_search": 0,
@@ -75,7 +75,7 @@
    "email": 1,
    "print": 1,
    "read": 1,
-   "role": "System Manager",
+   "role": "Embark Studio",
    "share": 1,
    "write": 1
   }

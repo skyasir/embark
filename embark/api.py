@@ -18,7 +18,7 @@ import frappe
 from frappe import _
 from frappe.utils import cstr, flt, get_fullname, validate_email_address
 
-from embark import assistant
+from embark import assistant, copilot
 from embark.conditions import applies
 from embark.embark.doctype.embark_onboarding.embark_onboarding import (
 	LOCKED_STATUSES,
@@ -110,6 +110,7 @@ def get_overview(onboarding: str | None = None) -> dict:
 		"has_data": any(row.rows for row in doc.areas),
 		"tally": _tally(doc),
 		"assistant": assistant.is_on(),
+		"can_configure_ai": _can_configure_ai(),
 		"assistant_model": assistant.model_name(),
 		"user": {"name": frappe.session.user, "full_name": get_fullname(frappe.session.user)},
 	}
@@ -118,7 +119,7 @@ def get_overview(onboarding: str | None = None) -> dict:
 @frappe.whitelist()
 def ai_settings() -> dict:
 	"""What the chat is pointed at. The key itself never comes back."""
-	_require_staff()
+	copilot._studio_user()
 	doc = frappe.get_single("Embark Settings")
 	return {
 		"enabled": bool(doc.assistant_enabled),
@@ -139,7 +140,7 @@ def save_ai_settings(
 	api_key: str | None = None,
 ) -> dict:
 	"""Point the chat at a provider, from the portal: the desk may not be open yet."""
-	_require_staff()
+	copilot._studio_user()
 	doc = frappe.get_single("Embark Settings")
 	doc.assistant_enabled = 1 if frappe.parse_json(enabled) else 0
 	doc.provider = provider
@@ -585,6 +586,15 @@ def _tally(doc) -> dict | None:
 		"route": "/app/tally-migrator",
 		"repo": "https://github.com/frappe/tally_migrator",
 	}
+
+
+def _can_configure_ai() -> bool:
+	"""Pointing the chat at a provider is the implementer's job, not the customer's."""
+	try:
+		copilot._studio_user()
+	except frappe.PermissionError:
+		return False
+	return True
 
 
 def setup_done() -> bool:
