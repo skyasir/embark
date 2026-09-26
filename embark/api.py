@@ -61,12 +61,16 @@ def get_overview(onboarding: str | None = None) -> dict:
 	# new interview question or a deleted upload must not leave a stale figure
 	# on screen until someone happens to save the record.
 	doc.refresh_areas()
+	# The plan is derived too, so an onboarding that predates a rule (or the
+	# plan itself) shows the right one without waiting for its next save.
+	doc.sync_tasks()
+	_adopt_company(doc)
 	areas = {
 		a.name: a
 		for a in frappe.get_all(
 			"Embark Data Area",
 			filters={"name": ("in", [row.data_area for row in doc.areas] or [""])},
-			fields=["name", "description", "sequence", "icon"],
+			fields=["name", "description", "sequence", "icon", "because"],
 		)
 	}
 	steps = sorted(
@@ -75,6 +79,7 @@ def get_overview(onboarding: str | None = None) -> dict:
 				"area": row.data_area,
 				"description": areas[row.data_area].description if row.data_area in areas else "",
 				"icon": areas[row.data_area].icon if row.data_area in areas else "",
+				"because": areas[row.data_area].because if row.data_area in areas else "",
 				"sequence": areas[row.data_area].sequence if row.data_area in areas else 0,
 				"required": bool(row.required),
 				"status": row.status,
@@ -98,7 +103,9 @@ def get_overview(onboarding: str | None = None) -> dict:
 		"interview": doc.interview(),
 		"company": {f: doc.get(f) for f in COMPANY_FIELDS},
 		"company_complete": doc.company_complete(),
+		"company_from_erpnext": bool(doc.company_name) and setup_done(),
 		"steps": steps,
+		"plan": _plan(doc),
 		"can_submit": doc.readiness == 100 and doc.status not in LOCKED_STATUSES,
 		"can_use_desk": _can_use_desk(),
 		"has_data": any(row.rows for row in doc.areas),
@@ -469,6 +476,37 @@ def _ensure_area(doc, area: str):
 		frappe.throw(_("{0} is not one of your steps.").format(area), frappe.DoesNotExistError)
 
 
+def _plan(doc) -> list[dict]:
+	"""The part of the plan that is not a sheet: settings, decisions, training.
+
+	Generated from the answers like the steps are, and each line says why it is
+	there. How it gets done is the consultant's note, not the customer's.
+	"""
+	if not doc.tasks:
+		return []
+	library = {
+		t.name: t
+		for t in frappe.get_all(
+			"Embark Setup Task",
+			filters={"name": ("in", [row.setup_task for row in doc.tasks])},
+			fields=["name", "description", "detail"],
+		)
+	}
+	staff = is_staff()
+	return [
+		{
+			"key": row.setup_task,
+			"title": row.title,
+			"kind": row.kind,
+			"because": row.because,
+			"status": row.status,
+			"description": library.get(row.setup_task, {}).get("description"),
+			"detail": library.get(row.setup_task, {}).get("detail") if staff else None,
+		}
+		for row in doc.tasks
+	]
+
+
 def _tally(doc) -> dict | None:
 	"""Customers who answered "Tally" are offered Tally Migrator instead of typing.
 
@@ -484,6 +522,47 @@ def _tally(doc) -> dict | None:
 	}
 
 
+def setup_done() -> bool:
+	"""Has ERPNext's setup wizard been run on this site?
+
+	frappe.is_setup_complete() reads the per-app flags, which is what the desk
+	itself checks; System Settings can say complete while ERPNext is not.
+	"""
+	return bool(
+		frappe.is_setup_complete()
+		if hasattr(frappe, "is_setup_complete")
+		else frappe.db.get_single_value("System Settings", "setup_complete")
+	)
+
+
+def _adopt_company(doc) -> None:
+	"""Never ask for the company twice.
+
+	If ERPNext has already been set up on this site, its company holds the
+	answers, so Embark takes them instead of asking the customer again.
+	"""
+	if doc.company_name or not setup_done():
+		return
+	company = frappe.db.get_value(
+		"Company",
+		{},
+		["name", "abbr", "country", "default_currency", "tax_id"],
+		as_dict=True,
+		order_by="creation asc",
+	)
+	if not company:
+		return
+	doc.company_name = company.name
+	doc.abbr = company.abbr
+	doc.country = company.country
+	doc.default_currency = company.default_currency
+	doc.tax_id = company.tax_id
+	doc.fiscal_year_start = frappe.db.get_value(
+		"Fiscal Year", {}, "year_start_date", order_by="year_start_date desc"
+	)
+	doc.save(ignore_permissions=True)
+
+
 def _can_use_desk() -> bool:
 	"""A desk login, and a desk that will let them in.
 
@@ -491,14 +570,7 @@ def _can_use_desk() -> bool:
 	"""
 	if frappe.db.get_value("User", frappe.session.user, "user_type") != "System User":
 		return False
-	# frappe.is_setup_complete() reads the per-app flags, which is what the desk
-	# itself checks; System Settings can say complete while ERPNext is not.
-	done = (
-		frappe.is_setup_complete()
-		if hasattr(frappe, "is_setup_complete")
-		else frappe.db.get_single_value("System Settings", "setup_complete")
-	)
-	return is_staff() or bool(done)
+	return is_staff() or setup_done()
 
 
 def _locked(doc) -> bool:

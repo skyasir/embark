@@ -29,6 +29,8 @@
   "answers",
   "section_data",
   "areas",
+  "tasks_section",
+  "tasks",
   "section_review",
   "review_notes"
  ],
@@ -159,6 +161,18 @@
    "fieldtype": "Table",
    "label": "Data Areas",
    "options": "Embark Onboarding Area"
+  },
+  {
+   "fieldname": "tasks_section",
+   "fieldtype": "Section Break",
+   "label": "Setup Plan"
+  },
+  {
+   "fieldname": "tasks",
+   "fieldtype": "Table",
+   "label": "Setup Plan",
+   "options": "Embark Onboarding Task",
+   "read_only": 1
   },
   {
    "fieldname": "section_review",

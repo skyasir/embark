@@ -1,0 +1,76 @@
+{
+ "actions": [],
+ "creation": "2026-09-26 15:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "setup_task",
+  "title",
+  "kind",
+  "status",
+  "because",
+  "notes"
+ ],
+ "fields": [
+  {
+   "columns": 2,
+   "fieldname": "setup_task",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Setup Task",
+   "options": "Embark Setup Task",
+   "read_only": 1
+  },
+  {
+   "columns": 3,
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "kind",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Kind",
+   "read_only": 1
+  },
+  {
+   "columns": 2,
+   "default": "Planned",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Planned\nDone\nSkipped"
+  },
+  {
+   "columns": 2,
+   "fieldname": "because",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Because",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-09-26 15:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Embark",
+ "name": "Embark Onboarding Task",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

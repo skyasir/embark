@@ -1,0 +1,113 @@
+{
+ "actions": [],
+ "autoname": "field:task_key",
+ "creation": "2026-09-26 15:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "task_key",
+  "title",
+  "kind",
+  "sequence",
+  "column_break_1",
+  "applies_when",
+  "is_active",
+  "section_1",
+  "because",
+  "description",
+  "detail"
+ ],
+ "fields": [
+  {
+   "description": "Used internally, e.g. enable_batches. Lower case, no spaces.",
+   "fieldname": "task_key",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Key",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "default": "Setting",
+   "fieldname": "kind",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Kind",
+   "options": "Setting\nDecision\nTraining",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sequence",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Sequence"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "When this belongs in the plan, read against the interview answers, e.g. tracks_batches == yes. Empty means always.",
+   "fieldname": "applies_when",
+   "fieldtype": "Data",
+   "label": "Applies When"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Active"
+  },
+  {
+   "fieldname": "section_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "description": "Why this is in the plan, in the customer's words, e.g. you track batches or expiry dates.",
+   "fieldname": "because",
+   "fieldtype": "Data",
+   "label": "Because"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "What the Customer Sees"
+  },
+  {
+   "description": "What the consultant will do, e.g. Stock Settings > Batch Tracking.",
+   "fieldname": "detail",
+   "fieldtype": "Small Text",
+   "label": "How It Is Done"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-26 15:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Embark",
+ "name": "Embark Setup Task",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "sequence",
+ "sort_order": "ASC",
+ "states": [],
+ "track_changes": 1
+}

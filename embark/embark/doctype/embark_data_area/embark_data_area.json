@@ -13,6 +13,7 @@
   "sequence",
   "icon",
   "column_break_1",
+  "because",
   "description",
   "help_text",
   "section_fields",
@@ -58,6 +59,12 @@
   {
    "fieldname": "column_break_1",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "because",
+   "fieldtype": "Data",
+   "label": "Because",
+   "description": "Why this step is in the plan, in the customer's words, e.g. you keep stock."
   },
   {
    "description": "One plain sentence, e.g. Everyone you sell to.",

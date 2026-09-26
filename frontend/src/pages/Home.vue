@@ -64,7 +64,11 @@
 			<StepRow
 				icon="briefcase"
 				title="Company details"
-				description="Your company name, country, currency and financial year."
+				:description="
+					o.company_from_erpnext
+						? 'Taken from the company already set up in ERPNext.'
+						: 'Your company name, country, currency and financial year.'
+				"
 				:to="{ name: 'company' }"
 				:status="o.company_complete ? 'Ready' : 'Not Started'"
 			/>
@@ -81,6 +85,28 @@
 				:rows="step.rows"
 			/>
 		</ol>
+
+		<PlanSection
+			:plan="o.plan"
+			kind="Setting"
+			icon="settings"
+			title="What we'll set up in ERPNext"
+			subtitle="Worked out from your answers. Nothing here is extra work for you."
+		/>
+		<PlanSection
+			:plan="o.plan"
+			kind="Decision"
+			icon="help-circle"
+			title="Decisions we need from you"
+			subtitle="Small choices that are hard to change once you are live."
+		/>
+		<PlanSection
+			:plan="o.plan"
+			kind="Training"
+			icon="play-circle"
+			title="Training at handover"
+			subtitle="What we walk your team through once the data is in."
+		/>
 
 		<div class="flex flex-wrap items-center justify-between gap-3">
 			<p class="text-base text-ink-gray-6">
@@ -112,6 +138,7 @@ import { Badge, toast } from "frappe-ui"
 import Callout from "../components/Callout.vue"
 import ConsultantPanel from "../components/ConsultantPanel.vue"
 import StartOnboarding from "../components/StartOnboarding.vue"
+import PlanSection from "../components/PlanSection.vue"
 import StepRow from "../components/StepRow.vue"
 import TallyHint from "../components/TallyHint.vue"
 import { api, errorText } from "../data/api"

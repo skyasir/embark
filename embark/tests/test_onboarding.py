@@ -137,7 +137,9 @@ class TestOnboardingFlow(TestCase):
 	def test_customer_journey(self):
 		overview = api.get_overview()
 		self.assertEqual(overview["name"], self.onboarding.name)
-		self.assertEqual(overview["readiness"], 0)
+		# The company is only asked for when ERPNext has not been set up yet.
+		self.assertEqual(overview["company_complete"], api.setup_done())
+		self.assertEqual(overview["readiness"], 50 if api.setup_done() else 0)
 		# Nothing is asked for until the interview has been answered.
 		self.assertEqual(overview["steps"], [])
 
@@ -341,6 +343,44 @@ class TestOnboardingFlow(TestCase):
 
 		self.answer_interview()
 		self.assertIn("Items", steps())
+
+	def test_the_plan_is_generated_from_the_answers(self):
+
+		def plan():
+			return {line["key"]: line for line in api.get_overview(self.onboarding.name)["plan"]}
+
+		# No interview, no plan — the settings and training are not a standard list.
+		self.assertEqual(plan(), {})
+
+		self.answer_interview(keeps_stock="no", manufactures="no", tax_registered="no")
+		lines = plan()
+		self.assertNotIn("batches", lines)
+		self.assertNotIn("costing_method", lines)
+		self.assertNotIn("training_stock", lines)
+		self.assertNotIn("tax_setup", lines)
+		self.assertIn("training_selling", lines)
+
+		# Keeping stock brings the stock side of the plan with it, and says why.
+		api.save_answers(
+			self.onboarding.name,
+			{"keeps_stock": "yes", "tracks_batches": "yes", "tax_registered": "yes"},
+		)
+		self.answer_interview()
+		lines = plan()
+		self.assertEqual(lines["batches"]["kind"], "Setting")
+		self.assertEqual(lines["batches"]["because"], "you track batches or expiry dates")
+		self.assertEqual(lines["costing_method"]["kind"], "Decision")
+		self.assertIn("training_stock", lines)
+		self.assertIn("tax_setup", lines)
+
+		# A line the consultant has settled survives a change of mind.
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		for row in doc.tasks:
+			if row.setup_task == "batches":
+				row.status = "Done"
+		doc.save()
+		api.save_answers(self.onboarding.name, {"tracks_batches": "no"})
+		self.assertEqual(plan()["batches"]["status"], "Done")
 
 	def test_interview_shapes_the_onboarding(self):
 

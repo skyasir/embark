@@ -30,18 +30,8 @@
 					label="Company details"
 					:dot="overview.company_complete ? 'Ready' : 'Not Started'"
 				/>
-				<div v-if="overview.steps.length" class="px-2 pb-1 pt-4 text-sm font-medium text-ink-gray-5">
-					Your data
-				</div>
-				<NavLink
-					v-for="step in overview.steps"
-					:key="step.area"
-					:to="{ name: 'area', params: { area: step.area } }"
-					:icon="step.icon"
-					:label="step.area"
-					:dot="step.status"
-					:hint="step.required ? '' : 'Optional'"
-				/>
+				<!-- The data steps are not fixed navigation: they are the plan the
+				     interview produced, so they live on the Embark page itself. -->
 			</nav>
 
 			<Dropdown :options="userMenu" placement="right">
