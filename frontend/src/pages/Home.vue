@@ -10,6 +10,8 @@
 			</p>
 		</div>
 
+		<TallyHint />
+
 		<Callout v-if="o.status === 'Returned'" tone="warning">
 			<strong>Your consultant sent this back with a note.</strong>
 			<p class="mt-1 whitespace-pre-line">{{ o.review_notes }}</p>
@@ -23,46 +25,44 @@
 		</Callout>
 
 		<div class="rounded-lg border border-outline-gray-2 p-5">
-			<div>
-				<div class="mb-2 flex items-baseline justify-between text-base">
-					<span class="font-medium text-ink-gray-8">Readiness</span>
-					<span class="tabular-nums text-ink-gray-6">
-						{{ readySteps }} of {{ requiredSteps }} required steps ready
-					</span>
+			<div class="mb-3 flex items-end justify-between gap-4">
+				<div>
+					<div class="text-base text-ink-gray-6">Readiness</div>
+					<div class="text-3xl font-semibold tabular-nums text-ink-gray-9">{{ o.readiness }}%</div>
 				</div>
-				<div class="h-2 overflow-hidden rounded-full bg-surface-gray-2">
-					<div
-						class="h-full rounded-full transition-all"
-						:class="o.readiness === 100 ? 'bg-surface-green-3' : 'bg-surface-gray-7'"
-						:style="{ width: `${o.readiness}%` }"
-					/>
+				<div class="pb-1 text-base tabular-nums text-ink-gray-6">
+					{{ readySteps }} of {{ requiredSteps }} required steps ready
 				</div>
-				<div class="mt-1 text-right text-2xl font-semibold tabular-nums text-ink-gray-9">
-					{{ o.readiness }}%
-				</div>
+			</div>
+			<div class="h-2 overflow-hidden rounded-full bg-surface-gray-2">
+				<div
+					class="h-full rounded-full transition-all"
+					:class="o.readiness === 100 ? 'bg-surface-green-3' : 'bg-surface-gray-7'"
+					:style="{ width: `${o.readiness}%` }"
+				/>
 			</div>
 		</div>
 
 		<ol class="divide-y divide-outline-gray-1 overflow-hidden rounded-lg border border-outline-gray-2">
 			<StepRow
-				:number="1"
+				icon="message-square"
 				title="Tell us about your business"
 				:description="`What you do, so we only ask for what matters. ${o.interview.answered} of ${o.interview.total} answered.`"
 				:to="{ name: 'interview' }"
-				:status="o.interview.done ? 'Ready' : 'Not Started'"
+				:status="interviewStatus"
 			/>
 			<StepRow
-				:number="2"
+				icon="briefcase"
 				title="Company details"
 				description="Your company name, country, currency and financial year."
 				:to="{ name: 'company' }"
 				:status="o.company_complete ? 'Ready' : 'Not Started'"
 			/>
 			<StepRow
-				v-for="(step, i) in o.steps"
+				v-for="step in o.steps"
 				:key="step.area"
-				:number="i + 3"
 				:title="step.area"
+				:icon="step.icon"
 				:description="step.description"
 				:to="{ name: 'area', params: { area: step.area } }"
 				:status="step.status"
@@ -102,11 +102,16 @@ import Callout from "../components/Callout.vue"
 import ConsultantPanel from "../components/ConsultantPanel.vue"
 import StartOnboarding from "../components/StartOnboarding.vue"
 import StepRow from "../components/StepRow.vue"
+import TallyHint from "../components/TallyHint.vue"
 import { api, errorText } from "../data/api"
 import { loadOverview, setOverview, state } from "../data/store"
 
 const o = computed(() => state.overview)
 const submitting = ref(false)
+
+const interviewStatus = computed(() =>
+	o.value.interview.done ? "Ready" : o.value.interview.answered ? "In Progress" : "Not Started"
+)
 
 const requiredSteps = computed(() => 2 + o.value.steps.filter((s) => s.required).length)
 const readySteps = computed(

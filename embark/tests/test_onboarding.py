@@ -310,6 +310,16 @@ class TestOnboardingFlow(TestCase):
 		self.assertEqual(known["UOM"].get("nos"), "Nos")
 		self.assertEqual(known["Item Group"].get("products"), "Products")
 
+	def test_tally_answer_offers_the_migrator(self):
+		self.assertIsNone(api.get_overview(self.onboarding.name)["tally"])
+
+		overview = api.save_answers(self.onboarding.name, {"current_system": "tally"})
+		self.assertEqual(overview["tally"]["route"], "/app/tally-migrator")
+		self.assertEqual(overview["tally"]["installed"], "tally_migrator" in frappe.get_installed_apps())
+
+		# Anyone else is left alone.
+		self.assertIsNone(api.save_answers(self.onboarding.name, {"current_system": "paper"})["tally"])
+
 	def test_interview_shapes_the_onboarding(self):
 
 		def steps():

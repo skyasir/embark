@@ -5,14 +5,14 @@
 			class="hidden w-64 shrink-0 flex-col border-r border-outline-gray-1 bg-surface-menu-bar md:flex"
 		>
 			<div class="flex items-center gap-2.5 px-3 py-3">
-				<div
-					class="flex size-8 shrink-0 items-center justify-center rounded-md bg-surface-gray-7 text-base font-semibold text-ink-white"
-				>
-					{{ overview.client_name.charAt(0).toUpperCase() }}
-				</div>
+				<!-- The app mark, inlined: the same artwork as the desk tile. -->
+				<svg viewBox="0 0 54 54" class="size-8 shrink-0" aria-hidden="true">
+					<rect width="54" height="54" rx="15.43" fill="#4F46E5" />
+					<path d="M19 16h16v4.5H24v4.5h9.5v4.5H24v4.5h11V38H19z" fill="#fff" />
+				</svg>
 				<div class="min-w-0">
-					<div class="truncate text-base font-medium text-ink-gray-9">{{ overview.client_name }}</div>
-					<div class="truncate text-sm text-ink-gray-5">{{ overview.readiness }}% ready</div>
+					<div class="truncate text-base font-medium text-ink-gray-9">Embark</div>
+					<div class="truncate text-sm text-ink-gray-5">{{ overview.client_name }}</div>
 				</div>
 			</div>
 
@@ -20,11 +20,13 @@
 				<NavLink :to="{ name: 'home' }" icon="home" label="Overview" />
 				<NavLink
 					:to="{ name: 'interview' }"
+					icon="message-square"
 					label="About your business"
-					:dot="overview.interview.done ? 'Ready' : 'Not Started'"
+					:dot="overview.interview.done ? 'Ready' : overview.interview.answered ? 'In Progress' : 'Not Started'"
 				/>
 				<NavLink
 					:to="{ name: 'company' }"
+					icon="briefcase"
 					label="Company details"
 					:dot="overview.company_complete ? 'Ready' : 'Not Started'"
 				/>
@@ -33,30 +35,25 @@
 					v-for="step in overview.steps"
 					:key="step.area"
 					:to="{ name: 'area', params: { area: step.area } }"
+					:icon="step.icon"
 					:label="step.area"
 					:dot="step.status"
 					:hint="step.required ? '' : 'Optional'"
 				/>
 			</nav>
 
-			<a
-				v-if="overview.can_use_desk"
-				href="/app"
-				class="mx-2 mb-2 flex h-8 items-center gap-2 rounded px-2 text-base text-ink-gray-7 hover:bg-surface-gray-2"
-			>
-				<FeatherIcon name="grid" class="size-4" />
-				Switch to Desk
-			</a>
-			<div class="flex items-center gap-2.5 border-t border-outline-gray-1 px-3 py-3">
-				<Avatar :label="overview.user.full_name" size="lg" />
-				<div class="min-w-0 flex-1">
-					<div class="truncate text-base text-ink-gray-8">{{ overview.user.full_name }}</div>
-					<div class="truncate text-sm text-ink-gray-5">{{ overview.user.name }}</div>
-				</div>
-				<Tooltip text="Log out">
-					<Button variant="ghost" icon="log-out" label="Log out" @click="logout" />
-				</Tooltip>
-			</div>
+			<Dropdown :options="userMenu" placement="right">
+				<button
+					class="flex w-full items-center gap-2.5 border-t border-outline-gray-1 px-3 py-3 text-left hover:bg-surface-gray-2"
+				>
+					<Avatar :label="overview.user.full_name" size="lg" />
+					<div class="min-w-0 flex-1">
+						<div class="truncate text-base text-ink-gray-8">{{ overview.user.full_name }}</div>
+						<div class="truncate text-sm text-ink-gray-5">{{ overview.user.name }}</div>
+					</div>
+					<FeatherIcon name="chevron-up" class="size-4 shrink-0 text-ink-gray-5" />
+				</button>
+			</Dropdown>
 		</aside>
 
 		<div class="flex min-w-0 flex-1 flex-col">
@@ -66,7 +63,7 @@
 				</router-link>
 				<span class="text-ink-gray-4">/</span>
 				<span class="truncate font-medium text-ink-gray-9">{{ title }}</span>
-				<!-- The sidebar, and its log-out button, is hidden on phones. -->
+				<!-- The sidebar, and its user menu, is hidden on phones. -->
 				<a v-if="overview?.can_use_desk" href="/app" class="ml-auto text-sm text-ink-gray-6 hover:text-ink-gray-9 md:hidden">Desk</a>
 				<Button v-if="overview" :class="overview?.can_use_desk ? '' : 'ml-auto'" class="md:hidden" variant="ghost" icon="log-out" label="Log out" @click="logout" />
 			</header>
@@ -88,7 +85,7 @@
 <script setup>
 import { computed, onMounted, watchEffect } from "vue"
 import { useRoute, useRouter } from "vue-router"
-import { Avatar, FeatherIcon, LoadingIndicator, Toast, Tooltip, call } from "frappe-ui"
+import { Avatar, Dropdown, FeatherIcon, LoadingIndicator, Toast, call } from "frappe-ui"
 
 import Callout from "./components/Callout.vue"
 import NavLink from "./components/NavLink.vue"
@@ -109,6 +106,13 @@ const title = computed(() => {
 	if (route.name === "area") return route.params.area
 	return "Overview"
 })
+
+const userMenu = computed(() => [
+	...(overview.value?.can_use_desk
+		? [{ label: "Switch to Desk", icon: "grid", onClick: () => (window.location.href = "/app") }]
+		: []),
+	{ label: "Log out", icon: "log-out", onClick: logout },
+])
 
 // The tab reads "Items · Embark", so a customer with several tabs open can find it.
 watchEffect(() => {

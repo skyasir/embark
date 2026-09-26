@@ -57,12 +57,16 @@ def get_overview(onboarding: str | None = None) -> dict:
 			"can_use_desk": True,
 		}
 	doc = _get_onboarding(onboarding)
+	# Readiness and step status are derived, so recompute them for the read: a
+	# new interview question or a deleted upload must not leave a stale figure
+	# on screen until someone happens to save the record.
+	doc.refresh_areas()
 	areas = {
 		a.name: a
 		for a in frappe.get_all(
 			"Embark Data Area",
 			filters={"name": ("in", [row.data_area for row in doc.areas] or [""])},
-			fields=["name", "description", "sequence"],
+			fields=["name", "description", "sequence", "icon"],
 		)
 	}
 	steps = sorted(
@@ -70,6 +74,7 @@ def get_overview(onboarding: str | None = None) -> dict:
 			{
 				"area": row.data_area,
 				"description": areas[row.data_area].description if row.data_area in areas else "",
+				"icon": areas[row.data_area].icon if row.data_area in areas else "",
 				"sequence": areas[row.data_area].sequence if row.data_area in areas else 0,
 				"required": bool(row.required),
 				"status": row.status,
@@ -97,6 +102,7 @@ def get_overview(onboarding: str | None = None) -> dict:
 		"can_submit": doc.readiness == 100 and doc.status not in LOCKED_STATUSES,
 		"can_use_desk": _can_use_desk(),
 		"has_data": any(row.rows for row in doc.areas),
+		"tally": _tally(doc),
 		"user": {"name": frappe.session.user, "full_name": get_fullname(frappe.session.user)},
 	}
 
@@ -227,6 +233,7 @@ def get_area(onboarding: str, area: str) -> dict:
 			"name": area_doc.name,
 			"description": area_doc.description,
 			"help_text": area_doc.help_text,
+			"icon": area_doc.icon,
 			"required": next(bool(r.required) for r in doc.areas if r.data_area == area),
 		},
 		"columns": [c.as_dict() for c in build_columns(area_doc, answers)],
@@ -460,6 +467,21 @@ def _upload_name(onboarding: str, area: str) -> str | None:
 def _ensure_area(doc, area: str):
 	if area not in {row.data_area for row in doc.areas}:
 		frappe.throw(_("{0} is not one of your steps.").format(area), frappe.DoesNotExistError)
+
+
+def _tally(doc) -> dict | None:
+	"""Customers who answered "Tally" are offered Tally Migrator instead of typing.
+
+	Frappe's own app reads a Tally export straight into ERPNext, so Embark points
+	at it rather than asking for the same masters in a spreadsheet.
+	"""
+	if doc.answer_map().get("current_system") != "tally":
+		return None
+	return {
+		"installed": "tally_migrator" in frappe.get_installed_apps(),
+		"route": "/app/tally-migrator",
+		"repo": "https://github.com/frappe/tally_migrator",
+	}
 
 
 def _can_use_desk() -> bool:
