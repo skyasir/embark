@@ -72,6 +72,11 @@ def settings():
 	return frappe.get_cached_doc("Embark Settings")
 
 
+def model_name() -> str:
+	"""Shown in the chat, so it is never a mystery what is answering."""
+	return settings().model or "" if is_on() else ""
+
+
 def is_on() -> bool:
 	"""Is there a provider to talk to? If not, no chat is offered at all."""
 	if not frappe.db.exists("DocType", "Embark Settings"):

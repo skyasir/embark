@@ -110,6 +110,7 @@ def get_overview(onboarding: str | None = None) -> dict:
 		"has_data": any(row.rows for row in doc.areas),
 		"tally": _tally(doc),
 		"assistant": assistant.is_on(),
+		"assistant_model": assistant.model_name(),
 		"user": {"name": frappe.session.user, "full_name": get_fullname(frappe.session.user)},
 	}
 
