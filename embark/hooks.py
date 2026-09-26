@@ -19,6 +19,8 @@ add_to_apps_screen = [
 	}
 ]
 
+# Embark Studio: the editor and the copilot, carried in with Embark so a
+# customer's site needs one app, not two.
 after_install = "embark.install.after_install"
 after_migrate = "embark.install.after_migrate"
 
