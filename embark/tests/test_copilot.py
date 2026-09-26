@@ -9,6 +9,7 @@ from embark import copilot
 # Custom fields commit as they are written, so a test that dies mid-way can
 # leave one behind. Each test starts by clearing its own.
 SCRATCH_FIELDS = ("Item-po_number", "Item-shelf_code")
+SCRATCH_WORKFLOW = "Copilot Item Approval"
 
 
 class TestCopilot(FrappeTestCase):
@@ -16,6 +17,8 @@ class TestCopilot(FrappeTestCase):
 		for name in SCRATCH_FIELDS:
 			if frappe.db.exists("Custom Field", name):
 				frappe.delete_doc("Custom Field", name, force=True, ignore_permissions=True)
+		if frappe.db.exists("Workflow", SCRATCH_WORKFLOW):
+			frappe.delete_doc("Workflow", SCRATCH_WORKFLOW, force=True, ignore_permissions=True)
 		frappe.db.commit()
 		frappe.clear_cache(doctype="Item")
 
@@ -50,6 +53,33 @@ class TestCopilot(FrappeTestCase):
 		copilot.undo(plan["name"])
 		frappe.clear_cache(doctype="Item")
 		self.assertEqual(frappe.get_meta("Item").get_field("item_name").label, before)
+
+	def test_a_workflow_is_built_and_taken_back(self):
+		rows = copilot.create_workflow(
+			"Item",
+			"Copilot Item Approval",
+			states=[
+				{"state": "Draft", "role": "System Manager"},
+				{"state": "Approved", "role": "System Manager"},
+			],
+			transitions=[
+				{"state": "Draft", "action": "Approve", "next_state": "Approved", "role": "System Manager"}
+			],
+		)
+		plan = copilot.propose("Item approval", "items should be approved", rows)
+		copilot.apply(plan["name"])
+		self.assertTrue(frappe.db.exists("Workflow", "Copilot Item Approval"))
+
+		copilot.undo(plan["name"])
+		self.assertFalse(frappe.db.exists("Workflow", "Copilot Item Approval"))
+
+	def test_a_client_script_needs_somewhere_to_run(self):
+		self.assertRaises(frappe.ValidationError, copilot.create_client_script, "Item", "")
+		self.assertRaises(
+			frappe.ValidationError, copilot.create_client_script, "Item", "console.log(1)", "Kanban"
+		)
+		change = copilot.create_client_script("Item", "frappe.ui.form.on('Item', {});")
+		self.assertEqual(change["ref_doctype"], "Client Script")
 
 	def test_it_refuses_what_it_should_not_touch(self):
 		# Business data is out of reach, whatever the model asks for.
