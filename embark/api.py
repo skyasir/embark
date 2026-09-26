@@ -61,9 +61,7 @@ def get_overview(onboarding: str | None = None) -> dict:
 	# new interview question or a deleted upload must not leave a stale figure
 	# on screen until someone happens to save the record.
 	doc.refresh_areas()
-	# The plan is derived too, so an onboarding that predates a rule (or the
-	# plan itself) shows the right one without waiting for its next save.
-	doc.sync_tasks()
+	_replan(doc)
 	_adopt_company(doc)
 	areas = {
 		a.name: a
@@ -474,6 +472,23 @@ def _upload_name(onboarding: str, area: str) -> str | None:
 def _ensure_area(doc, area: str):
 	if area not in {row.data_area for row in doc.areas}:
 		frappe.throw(_("{0} is not one of your steps.").format(area), frappe.DoesNotExistError)
+
+
+def _replan(doc) -> None:
+	"""Keep the plan in step with the rules, not just with the last save.
+
+	A step or a setup task added to the library after this onboarding started
+	belongs in it too, so the plan is rebuilt on read and written back when it
+	has actually moved — otherwise a step could show on the overview that the
+	record does not hold.
+	"""
+	before = ([r.data_area for r in doc.areas], [r.setup_task for r in doc.tasks])
+	doc.sync_areas()
+	doc.sync_tasks()
+	if doc.status in LOCKED_STATUSES:
+		return
+	if ([r.data_area for r in doc.areas], [r.setup_task for r in doc.tasks]) != before:
+		doc.save(ignore_permissions=True)
 
 
 def _plan(doc) -> list[dict]:
