@@ -185,6 +185,9 @@ def chat(message: str, history: str | list | None = None, images: str | list | N
 
 	pending: list[dict] = []
 	errors: list[str] = []
+	# What it did, in order, so the consultant watches the work rather than a
+	# spinner: each tool call, what it was asked, and what came back.
+	steps: list[dict] = []
 	request = message
 	nudged = False
 	for _round in range(MAX_ROUNDS):
@@ -214,11 +217,12 @@ def chat(message: str, history: str | list | None = None, images: str | list | N
 			text = "" if looks_like_plumbing(reply["text"]) else reply["text"]
 			if not change_set and errors:
 				text = _("I could not do that: {0}").format(errors[-1])
-			return {"reply": text, "change_set": change_set, "pending": []}
+			return {"reply": text, "change_set": change_set, "steps": steps, "pending": []}
 
 		messages.append(reply["raw"])
 		for call in reply["tool_calls"]:
 			result, change_set = _run_tool(call["name"], call["arguments"], pending, request)
+			steps.append(_step(call, result))
 			if result.get("error"):
 				errors.append(result["error"])
 			messages.append(
@@ -235,10 +239,15 @@ def chat(message: str, history: str | list | None = None, images: str | list | N
 				return {
 					"reply": closing["text"] or _("Proposed {0}.").format(change_set["title"]),
 					"change_set": change_set,
+					"steps": steps,
 					"pending": [],
 				}
 
-	return {"reply": _("I could not work that out. Could you say it more simply?"), "change_set": None}
+	return {
+		"reply": _("I could not work that out. Could you say it more simply?"),
+		"change_set": None,
+		"steps": steps,
+	}
 
 
 def _check_images(images: str | list | None) -> list[str]:
@@ -281,6 +290,25 @@ def _user_message(message: str, images: list[str]) -> dict:
 	else:
 		blocks = [{"type": "image_url", "image_url": {"url": url}} for url in images]
 	return {"role": "user", "content": [{"type": "text", "text": message}, *blocks]}
+
+
+def _step(call: dict, result: dict) -> dict:
+	"""One line of the work, with the detail folded away behind it."""
+	added = result.get("added")
+	if result.get("error"):
+		outcome = result["error"]
+	elif added:
+		outcome = ", ".join(added) if isinstance(added, list) else str(added)
+	elif result.get("proposed"):
+		outcome = _("Written down as {0}").format(result["proposed"])
+	else:
+		outcome = _("Done")
+	return {
+		"tool": call["name"],
+		"arguments": {k: v for k, v in (call.get("arguments") or {}).items() if v not in (None, "")},
+		"outcome": outcome,
+		"failed": bool(result.get("error")),
+	}
 
 
 def _title(request: str) -> str:
