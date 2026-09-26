@@ -138,7 +138,9 @@ class TestCopilot(FrappeTestCase):
 		from embark import api, copilot_chat
 
 		user = frappe.db.get_value(
-			"User", {"enabled": 1, "user_type": "System User", "name": ("not in", ("Administrator", "Guest"))}, "name"
+			"User",
+			{"enabled": 1, "user_type": "System User", "name": ("not in", ("Administrator", "Guest"))},
+			"name",
 		)
 		if not user or "Embark Studio" in frappe.get_roles(user):
 			self.skipTest("no non-Studio user on this site")

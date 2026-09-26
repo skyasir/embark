@@ -111,9 +111,7 @@ def ask(onboarding: str, message: str, history: list[dict] | None = None) -> dic
 	if not is_on():
 		frappe.throw(_("The chat assistant is not set up on this site."))
 
-	messages = [
-		{"role": "user", "content": m["content"]} if m["role"] == "user" else m for m in (history or [])
-	]
+	messages = _conversation(history)
 	messages.append({"role": "user", "content": message})
 
 	used: list[str] = []
@@ -173,6 +171,21 @@ def _step(call: dict, result: dict) -> dict:
 	from embark.copilot_chat import _step as studio_step
 
 	return studio_step(call, result)
+
+
+def _conversation(history: list[dict] | None) -> list[dict]:
+	"""Only what was actually said, in the shape a provider accepts.
+
+	The panel also draws tool steps and change sets; they are not conversation,
+	and one message without content is enough for a provider to reject the
+	whole request.
+	"""
+	out = []
+	for m in history or []:
+		role, content = m.get("role"), m.get("content")
+		if role in ("user", "assistant") and isinstance(content, str) and content.strip():
+			out.append({"role": role, "content": content})
+	return out
 
 
 def _run_tool(onboarding: str, name: str, arguments: dict, pending: list[dict] | None = None) -> dict:

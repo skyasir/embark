@@ -137,7 +137,7 @@ async function send(text) {
 			message,
 			onboarding: state.id,
 			// Only the plain turns: the server rebuilds its own tool context.
-			history: JSON.stringify(messages.value.slice(-10, -1)),
+			history: JSON.stringify(said()),
 		})
 		// Everything it did, in the order it did it.
 		;(result.steps || []).forEach((step) => messages.value.push({ role: "step", step }))
@@ -152,6 +152,18 @@ async function send(text) {
 		busy.value = false
 		await scrollDown()
 	}
+}
+
+/**
+ * The conversation as the model should see it: what was said, not the step
+ * rows or change cards drawn beside it. Those carry no `content`, and a
+ * provider rejects the whole request over one message it cannot read.
+ */
+function said() {
+	return messages.value
+		.filter((m) => (m.role === "user" || m.role === "assistant") && m.content)
+		.slice(-8)
+		.map((m) => ({ role: m.role, content: m.content }))
 }
 
 function detail(step) {
