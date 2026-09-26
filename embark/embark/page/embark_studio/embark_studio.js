@@ -159,14 +159,19 @@ frappe.embark_studio.Workbench = class Workbench {
 				<div class="fvs-copilot" style="display:none">
 					<div class="fvs-copilot-head">
 						<span class="fvs-copilot-title">${__("Copilot")}</span>
-						<span class="fvs-copilot-model"></span>
 						<button class="fvs-icon-btn fvs-copilot-close" title="${__("Close")}">✕</button>
 					</div>
 					<div class="fvs-copilot-log"></div>
 					<div class="fvs-copilot-composer">
-						<textarea class="fvs-copilot-input" rows="2" spellcheck="false"
-							placeholder="${__("Add a PO Number field to Sales Order…")}"></textarea>
-						<button class="fvs-btn fvs-copilot-send">${__("Send")}</button>
+						<div class="fvs-composer-box">
+							<textarea class="fvs-copilot-input" rows="2" spellcheck="false"
+								placeholder="${__("Ask to change this site…")}"></textarea>
+							<div class="fvs-composer-foot">
+								<span class="fvs-composer-model" title="${__("The model answering")}"></span>
+								<button class="fvs-send-btn fvs-copilot-send" title="${__("Send")}"
+									aria-label="${__("Send")}">↑</button>
+							</div>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -237,7 +242,7 @@ frappe.embark_studio.Workbench = class Workbench {
 		this.copilot_ready = true;
 		try {
 			const status = await frappe.xcall("embark.copilot_chat.status");
-			this.$root.find(".fvs-copilot-model").text(status.on ? status.model : "");
+			this.$root.find(".fvs-composer-model").text(status.on ? status.model : __("no model"));
 			if (!status.on) {
 				this.copilot_say(
 					"system",

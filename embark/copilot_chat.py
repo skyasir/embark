@@ -169,7 +169,7 @@ def status() -> dict:
 @frappe.whitelist()
 def chat(message: str, history: str | list | None = None) -> dict:
 	"""One turn. Returns what to say, and the change set if one was proposed."""
-	copilot._staff()
+	copilot._studio_user()
 	if not status()["on"]:
 		frappe.throw(_("No AI is configured on this bench yet."))
 
