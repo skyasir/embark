@@ -138,10 +138,13 @@ class TestOnboardingFlow(TestCase):
 		overview = api.get_overview()
 		self.assertEqual(overview["name"], self.onboarding.name)
 		self.assertEqual(overview["readiness"], 0)
-		self.assertEqual([s["area"] for s in overview["steps"]][:2], ["Users", "Item Groups"])
+		# Nothing is asked for until the interview has been answered.
+		self.assertEqual(overview["steps"], [])
 
 		self.answer_interview()
-		self.assertTrue(api.get_overview(self.onboarding.name)["interview"]["done"])
+		overview = api.get_overview(self.onboarding.name)
+		self.assertTrue(overview["interview"]["done"])
+		self.assertEqual([s["area"] for s in overview["steps"]][:2], ["Users", "Item Groups"])
 
 		overview = api.save_company_details(
 			self.onboarding.name,
@@ -242,6 +245,7 @@ class TestOnboardingFlow(TestCase):
 		self.assertEqual(api.get_overview()["review_notes"], "Add your price list")
 
 	def test_remove_file(self):
+		self.answer_interview()
 		self.upload("Units of Measure", [["Unit"], ["Carton"]])
 		self.assertEqual(self.step("Units of Measure")["status"], "Ready")
 		area = api.remove_file(self.onboarding.name, "Units of Measure")
@@ -281,8 +285,9 @@ class TestOnboardingFlow(TestCase):
 		overview = api.start_onboarding("Yasir Traders")["overview"]
 		self.assertEqual(overview["client_name"], "Yasir Traders")
 		self.assertEqual(api.get_overview()["name"], overview["name"])
-		# Every step the answers allow is offered from the start.
-		self.assertIn("Items", [s["area"] for s in overview["steps"]])
+		# A new onboarding starts with the interview and nothing else: the steps
+		# are built from the answers.
+		self.assertEqual(overview["steps"], [])
 		self.assertRaises(frappe.ValidationError, api.start_onboarding, "Someone Else")
 
 	def test_standard_values_before_setup(self):
@@ -320,6 +325,23 @@ class TestOnboardingFlow(TestCase):
 		# Anyone else is left alone.
 		self.assertIsNone(api.save_answers(self.onboarding.name, {"current_system": "paper"})["tally"])
 
+	def test_no_checklist_until_the_interview_is_answered(self):
+
+		def steps():
+			return [s["area"] for s in api.get_overview(self.onboarding.name)["steps"]]
+
+		# The checklist is built from the answers, not trimmed from a standard
+		# list, so a customer who has answered nothing is asked for nothing.
+		self.assertEqual(steps(), [])
+		self.assertRaises(frappe.DoesNotExistError, api.get_area, self.onboarding.name, "Items")
+
+		# Half an interview is still no checklist.
+		api.save_answers(self.onboarding.name, {"keeps_stock": "yes"})
+		self.assertEqual(steps(), [])
+
+		self.answer_interview()
+		self.assertIn("Items", steps())
+
 	def test_interview_shapes_the_onboarding(self):
 
 		def steps():
@@ -328,16 +350,12 @@ class TestOnboardingFlow(TestCase):
 		def item_columns():
 			return {c["fieldname"] for c in api.get_area(self.onboarding.name, "Items")["columns"]}
 
-		# Nothing answered yet: everything is still on the table.
-		self.assertIn("Warehouses", steps())
-		self.assertTrue({"has_batch_no", "is_stock_item"} <= item_columns())
-		self.assertEqual(api.get_overview(self.onboarding.name)["interview"]["answered"], 0)
-
 		# A business with no stock is not asked for warehouses or stock columns.
-		overview = api.save_answers(self.onboarding.name, {"keeps_stock": "no", "business_type": "services"})
+		self.answer_interview(keeps_stock="no", business_type="services")
+		overview = api.get_overview(self.onboarding.name)
 		self.assertNotIn("Warehouses", steps())
 		self.assertEqual(item_columns() & {"has_batch_no", "has_serial_no", "is_stock_item"}, set())
-		self.assertEqual(overview["interview"]["answered"], 2)
+		self.assertTrue(overview["interview"]["done"])
 		# The stock questions are no longer asked, so they are not counted either.
 		asked = [q["key"] for q in api.get_interview(self.onboarding.name)["questions"]]
 		self.assertNotIn("tracks_batches", asked)
@@ -365,6 +383,7 @@ class TestOnboardingFlow(TestCase):
 		self.assertRaises(frappe.ValidationError, api.save_answers, self.onboarding.name, {"nope": "yes"})
 
 	def test_template_download(self):
+		self.answer_interview()
 		api.download_template("Customers", self.onboarding.name)
 		wb = load_workbook(io.BytesIO(frappe.response.filecontent))
 		self.assertEqual(wb.sheetnames[1], "How to fill")

@@ -30,7 +30,9 @@
 					label="Company details"
 					:dot="overview.company_complete ? 'Ready' : 'Not Started'"
 				/>
-				<div class="px-2 pb-1 pt-4 text-sm font-medium text-ink-gray-5">Your data</div>
+				<div v-if="overview.steps.length" class="px-2 pb-1 pt-4 text-sm font-medium text-ink-gray-5">
+					Your data
+				</div>
 				<NavLink
 					v-for="step in overview.steps"
 					:key="step.area"
