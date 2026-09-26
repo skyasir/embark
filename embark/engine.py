@@ -450,9 +450,10 @@ def check(
 				issues.append(_issue(code, c, sheet_row, _display(raw), *_message(code, c, raw, detail)))
 		clean_rows.append(out)
 
-	# Duplicates on the unique field.
+	# Duplicates on the unique field, where the sheet has one. Some do not: an
+	# item may appear on several price lists.
 	keys, first_seen = [], {}
-	for r in clean_rows:
+	for r in clean_rows if key_field else []:
 		key = cstr(r.get(key_field)).strip()
 		if not key:
 			continue

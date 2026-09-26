@@ -16,7 +16,7 @@ class EmbarkDataArea(Document):
 		if dupes:
 			frappe.throw(_("These columns are listed twice: {0}").format(", ".join(dupes)))
 
-		if self.key_field not in names:
+		if self.key_field and self.key_field not in names:
 			frappe.throw(_("The unique field {0} must be one of the columns.").format(self.key_field))
 
 		for row in self.fields:
