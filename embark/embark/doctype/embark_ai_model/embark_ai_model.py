@@ -47,12 +47,8 @@ class EmbarkAIModel(Document):
 		self._validate_provider_known()
 		self._resolve_context_window()
 
-	def after_insert(self):
-		if not self.enabled:
-			return
-		from flow.assistant import sync_builtin_assistant
-
-		sync_builtin_assistant(model=self.name)
+	# Flow's built-in assistant did not come with the engine, so there is
+	# nothing to sync a new model into: Embark picks the enabled one when it runs.
 
 	def _normalize(self):
 		for field in ("title", "model_id", "base_url"):
@@ -133,7 +129,7 @@ class EmbarkAIModel(Document):
 				title=_("Missing Dependency"),
 			)
 
-		from flow.lib.model import resolve_provider_credentials
+		from embark.vendor.flow.model import resolve_provider_credentials
 
 		provider_creds = resolve_provider_credentials(self.model_id)
 		api_key = self.get_password("api_key", raise_exception=False) or provider_creds.get("api_key") or None
