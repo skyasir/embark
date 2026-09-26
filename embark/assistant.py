@@ -19,6 +19,8 @@ import frappe
 import requests
 from frappe import _
 
+from embark.llm import looks_like_plumbing, recovered_calls
+
 # A long conversation with a small model is still cheap; a runaway loop is not.
 MAX_ROUNDS = 6
 TIMEOUT = 60
@@ -100,15 +102,20 @@ def ask(onboarding: str, message: str, history: list[dict] | None = None) -> dic
 	used = []
 	for _round in range(MAX_ROUNDS):
 		reply = _complete(messages)
-		if not reply["tool_calls"]:
+		calls = reply["tool_calls"] or recovered_calls(reply["text"])
+		if not calls:
+			text = reply["text"]
+			if looks_like_plumbing(text):
+				# Never show the machinery: say something true instead.
+				text = _("Sorry, I did not follow that. Could you say it another way?")
 			return {
-				"reply": reply["text"] or _("Sorry, I did not follow that. Could you say it another way?"),
+				"reply": text or _("Sorry, I did not follow that. Could you say it another way?"),
 				"used": used,
 				"overview": api.get_overview(onboarding),
 			}
 
 		messages.append(reply["raw"])
-		for call in reply["tool_calls"]:
+		for call in calls:
 			result = _run_tool(onboarding, call["name"], call["arguments"])
 			used.append(call["name"])
 			messages.append(

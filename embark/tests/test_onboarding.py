@@ -350,6 +350,47 @@ class TestOnboardingFlow(TestCase):
 		self.assertFalse(api.get_overview(self.onboarding.name)["assistant"])
 		self.assertRaises(frappe.ValidationError, api.ask, "hello", self.onboarding.name)
 
+	def test_a_tool_call_written_as_text_is_still_a_tool_call(self):
+		"""A small model often types the call instead of making it."""
+		from embark import llm
+
+		written = '{"name": "save_answers", "parameters": {"answers": {"keeps_stock": "no"}}}'
+		self.assertEqual(
+			llm.recovered_calls(written),
+			[{"id": "recovered-save_answers", "name": "save_answers", "arguments": {"answers": {"keeps_stock": "no"}}}],
+		)
+		# Fenced, and with a sentence around it, is the same call.
+		self.assertTrue(llm.recovered_calls(f"Sure:\n```json\n{written}\n```"))
+		# Plain talk is left alone.
+		self.assertEqual(llm.recovered_calls("What do you sell?"), [])
+		self.assertFalse(llm.looks_like_plumbing("What do you sell?"))
+		self.assertTrue(llm.looks_like_plumbing(written))
+
+	def test_the_assistant_acts_on_a_written_tool_call(self):
+		from unittest.mock import patch
+
+		frappe.db.set_single_value(
+			"Embark Settings",
+			{"assistant_enabled": 1, "provider": "OpenAI compatible", "model": "stub", "base_url": "http://stub.invalid/v1"},
+		)
+		frappe.clear_cache(doctype="Embark Settings")
+
+		turns = [
+			{
+				"text": '{"name": "save_answers", "parameters": {"answers": {"keeps_stock": "no"}}}',
+				"raw": {"role": "assistant"},
+				"tool_calls": [],
+			},
+			{"text": "Noted, no stock.", "raw": {"role": "assistant"}, "tool_calls": []},
+		]
+		with patch.object(assistant, "_complete", side_effect=turns):
+			result = api.ask("we hold no stock", self.onboarding.name)
+
+		self.assertEqual(result["used"], ["save_answers"])
+		self.assertEqual(result["reply"], "Noted, no stock.")
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		self.assertEqual(doc.answer_map()["keeps_stock"], "no")
+
 	def test_assistant_answers_the_interview_and_nothing_else(self):
 		from unittest.mock import patch
 
