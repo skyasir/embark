@@ -18,7 +18,6 @@ from embark.engine import (
 	match_columns,
 	read_file,
 )
-from embark.permissions import is_staff
 from embark.presets import standard_values
 
 
@@ -27,7 +26,7 @@ class EmbarkUpload(Document):
 		onboarding = frappe.get_doc("Embark Onboarding", self.onboarding)
 		ensure_editable(onboarding.status)
 		if self.data_area not in {row.data_area for row in onboarding.areas}:
-			frappe.throw(_("{0} is not part of this onboarding's package.").format(self.data_area))
+			frappe.throw(_("{0} is not one of this onboarding's steps.").format(self.data_area))
 		if frappe.db.exists(
 			"Embark Upload",
 			{"onboarding": self.onboarding, "data_area": self.data_area, "name": ("!=", self.name)},
@@ -145,12 +144,10 @@ class EmbarkUpload(Document):
 
 
 def ensure_editable(status: str | None):
-	"""Once sent for review, the customer's data is frozen until the consultant returns it."""
-	if status in LOCKED_STATUSES and not is_staff():
+	"""Once sent for review the data is frozen until the onboarding is returned."""
+	if status in LOCKED_STATUSES:
 		frappe.throw(
-			_(
-				"Your data has been sent for review, so it can't be changed now. Ask your consultant to return it if something needs fixing."
-			),
+			_("This onboarding has been sent for review. Return it first to make changes."),
 			title=_("Sent for review"),
 		)
 
@@ -164,7 +161,7 @@ def onboarding_areas(onboarding: str) -> list[str]:
 
 
 def link_areas(areas: list[str]) -> dict[str, str]:
-	"""Target doctype → the step in this package that supplies it, e.g. Item Group → Item Groups."""
+	"""Target doctype → the step that supplies it, e.g. Item Group → Item Groups."""
 	return {frappe.get_cached_value("Embark Data Area", a, "target_doctype"): a for a in areas}
 
 

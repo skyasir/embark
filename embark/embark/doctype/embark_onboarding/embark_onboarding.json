@@ -6,13 +6,11 @@
  "engine": "InnoDB",
  "field_order": [
   "client_name",
-  "package",
   "status",
   "column_break_1",
   "readiness",
   "target_go_live",
   "consultant",
-  "portal_user",
   "section_company",
   "company_name",
   "abbr",
@@ -41,17 +39,6 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Customer",
-   "permlevel": 1,
-   "reqd": 1
-  },
-  {
-   "fieldname": "package",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "label": "Package",
-   "options": "Embark Package",
-   "permlevel": 1,
    "reqd": 1
   },
   {
@@ -78,23 +65,13 @@
   {
    "fieldname": "target_go_live",
    "fieldtype": "Date",
-   "label": "Target Go-Live",
-   "permlevel": 1
+   "label": "Target Go-Live"
   },
   {
    "fieldname": "consultant",
    "fieldtype": "Link",
    "label": "Consultant",
-   "options": "User",
-   "permlevel": 1
-  },
-  {
-   "description": "The customer's portal login. Use Invite Customer to create it.",
-   "fieldname": "portal_user",
-   "fieldtype": "Link",
-   "label": "Customer Login",
-   "options": "User",
-   "permlevel": 1
+   "options": "User"
   },
   {
    "fieldname": "section_company",
@@ -181,8 +158,7 @@
    "fieldname": "areas",
    "fieldtype": "Table",
    "label": "Data Areas",
-   "options": "Embark Onboarding Area",
-   "permlevel": 1
+   "options": "Embark Onboarding Area"
   },
   {
    "fieldname": "section_review",
@@ -193,8 +169,7 @@
    "description": "Shown to the customer when you return the onboarding to them.",
    "fieldname": "review_notes",
    "fieldtype": "Small Text",
-   "label": "Notes for the Customer",
-   "permlevel": 1
+   "label": "Notes for the Customer"
   },
   {
    "fieldname": "section_business",
@@ -229,42 +204,6 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
-  },
-  {
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "permlevel": 0,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "Embark Consultant",
-   "share": 1,
-   "write": 1
-  },
-  {
-   "permlevel": 1,
-   "read": 1,
-   "role": "System Manager",
-   "write": 1
-  },
-  {
-   "permlevel": 1,
-   "read": 1,
-   "role": "Embark Consultant",
-   "write": 1
-  },
-  {
-   "permlevel": 0,
-   "read": 1,
-   "role": "Embark Customer",
-   "write": 1
-  },
-  {
-   "permlevel": 1,
-   "read": 1,
-   "role": "Embark Customer"
   }
  ],
  "show_title_field_in_link": 1,

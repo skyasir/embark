@@ -1,16 +1,10 @@
-"""Seed the roles, data areas and packages of the fast-track plan.
+"""Seed the interview questions and the data steps.
 
-Only missing records are created, so a consultant's edits survive every
+Only missing records are created, so edits made in the desk survive every
 migrate. To pick up a changed default, delete the record and migrate.
 """
 
 import frappe
-
-ROLES = {
-	# Customers are Website Users: they only ever see the portal.
-	"Embark Customer": {"desk_access": 0},
-	"Embark Consultant": {"desk_access": 1},
-}
 
 CONTACT_COLUMNS = [
 	{
@@ -76,6 +70,7 @@ TAX_ID = {
 AREAS = [
 	{
 		"area_name": "Users",
+		"required": 1,
 		"target_doctype": "User",
 		"key_field": "email",
 		"sequence": 10,
@@ -120,6 +115,7 @@ AREAS = [
 	},
 	{
 		"area_name": "Item Groups",
+		"required": 0,
 		"target_doctype": "Item Group",
 		"key_field": "item_group_name",
 		"sequence": 20,
@@ -153,6 +149,7 @@ AREAS = [
 	},
 	{
 		"area_name": "Units of Measure",
+		"required": 0,
 		"target_doctype": "UOM",
 		"key_field": "uom_name",
 		"sequence": 30,
@@ -178,6 +175,7 @@ AREAS = [
 	},
 	{
 		"area_name": "Warehouses",
+		"required": 1,
 		"applies_when": "keeps_stock == yes",
 		"target_doctype": "Warehouse",
 		"key_field": "warehouse_name",
@@ -210,6 +208,7 @@ AREAS = [
 	},
 	{
 		"area_name": "Customers",
+		"required": 1,
 		"target_doctype": "Customer",
 		"key_field": "customer_name",
 		"sequence": 50,
@@ -265,6 +264,7 @@ AREAS = [
 	},
 	{
 		"area_name": "Suppliers",
+		"required": 1,
 		"target_doctype": "Supplier",
 		"key_field": "supplier_name",
 		"sequence": 60,
@@ -307,6 +307,7 @@ AREAS = [
 	},
 	{
 		"area_name": "Items",
+		"required": 1,
 		"target_doctype": "Item",
 		"key_field": "item_code",
 		"sequence": 70,
@@ -494,47 +495,6 @@ QUESTIONS = [
 ]
 
 
-CORE_ROLES = ["Accounts User", "Sales User", "Purchase User", "Stock User"]
-
-# Manufacturing and Frappe HR data areas are added in the next build steps;
-# until then Package 4 has nothing to collect and stays inactive.
-# desk_roles: what a customer invited with desk access gets. Never System Manager.
-PACKAGES = [
-	{
-		"package_name": "Package 1",
-		"modules": "Finance + Sales + Purchase + Inventory",
-		"hours": 8,
-		"is_active": 1,
-		"areas": CORE_AREAS,
-		"desk_roles": CORE_ROLES,
-	},
-	{
-		"package_name": "Package 2",
-		"modules": "Core ERPNext + Manufacturing",
-		"hours": 12,
-		"is_active": 1,
-		"areas": CORE_AREAS,
-		"desk_roles": [*CORE_ROLES, "Manufacturing User"],
-	},
-	{
-		"package_name": "Package 3",
-		"modules": "Core ERPNext + Manufacturing + Frappe HR",
-		"hours": 16,
-		"is_active": 1,
-		"areas": CORE_AREAS,
-		"desk_roles": [*CORE_ROLES, "Manufacturing User", "HR User"],
-	},
-	{
-		"package_name": "Package 4",
-		"modules": "Frappe HR - Complete HRMS",
-		"hours": 4,
-		"is_active": 0,
-		"areas": [("Users", 1)],
-		"desk_roles": ["HR User"],
-	},
-]
-
-
 def after_install():
 	seed()
 
@@ -544,12 +504,6 @@ def after_migrate():
 
 
 def seed():
-	for role, values in ROLES.items():
-		if frappe.db.exists("Role", role):
-			frappe.db.set_value("Role", role, values)
-		else:
-			frappe.get_doc({"doctype": "Role", "role_name": role, **values}).insert(ignore_permissions=True)
-
 	for question in QUESTIONS:
 		if not frappe.db.exists("Embark Question", question["question_key"]):
 			frappe.get_doc({"doctype": "Embark Question", **question}).insert(ignore_permissions=True)
@@ -559,21 +513,6 @@ def seed():
 			frappe.get_doc({"doctype": "Embark Data Area", **area}).insert(ignore_permissions=True)
 		else:
 			_fill_conditions(area)
-
-	for package in PACKAGES:
-		# Roles from apps that aren't installed (HR User without Frappe HR) are skipped.
-		roles = [{"role": r} for r in package["desk_roles"] if frappe.db.exists("Role", r)]
-		if not frappe.db.exists("Embark Package", package["package_name"]):
-			areas = [{"data_area": a, "required": r} for a, r in package["areas"]]
-			frappe.get_doc(
-				{"doctype": "Embark Package", **package, "areas": areas, "desk_roles": roles}
-			).insert(ignore_permissions=True)
-		else:
-			# Packages seeded before desk access existed get their roles once.
-			doc = frappe.get_doc("Embark Package", package["package_name"])
-			if not doc.desk_roles and roles:
-				doc.set("desk_roles", roles)
-				doc.save(ignore_permissions=True)
 
 
 def _fill_conditions(area: dict):

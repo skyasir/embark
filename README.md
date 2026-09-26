@@ -6,9 +6,9 @@ Embark prepares a customer's data **before** a fixed-hour, standard ERPNext
 implementation starts, so the implementation hours go on configuration and
 training rather than on chasing spreadsheets.
 
-It runs on the customer's own ERPNext site. When they buy an implementation
-package you create their site with Embark installed and hand it over, usually
-before ERPNext's setup wizard has been run.
+It runs on the customer's own ERPNext site: you create the site with Embark
+installed and hand it over, usually before ERPNext's setup wizard has been run.
+One site, one onboarding.
 
 ### The customer's journey
 
@@ -27,16 +27,15 @@ For each step the customer downloads a generated Excel template or uploads the
 file they already keep. Their headings are matched to ERPNext fields, every row
 is checked, and problems are explained in plain language and fixed on screen.
 
-### The consultant's side
+### Who can use it
 
-A new site shows only ERPNext's setup wizard in the desk, so everything you
-need before setup is in Embark itself: start the onboarding for a package,
-invite the customer, review the data, approve it or return it with notes, and
-download it in ERPNext's own shape. After setup the same record is available in
-the desk as well.
+Embark has no roles of its own. It is used by the site's **System Managers**,
+and everything it reads or writes goes through ERPNext's own permissions.
 
-Customers get a **portal-only** login, or **portal + desk**: the ERPNext roles
-of their package, never System Manager. Either way they land in Embark.
+A new site shows only ERPNext's setup wizard in the desk, so Embark works from
+its own portal: start the onboarding, fill it in, review the data, approve it
+or return it with a note, and download it in ERPNext's own shape. After setup
+the same record is available in the desk as well.
 
 ### How the checks work
 
@@ -52,12 +51,11 @@ modified; fixes made on screen are stored beside it and applied on every read.
 
 ### Configuration, not code
 
-Packages, data steps, their columns, the interview questions and the conditions
-that decide when each applies are all records you edit in the desk:
+Data steps, their columns, the interview questions and the conditions that
+decide when each applies are all records you edit in the desk:
 
 | Record | Holds |
 |---|---|
-| Embark Package | Hours, modules, its data steps and the desk roles it grants |
 | Embark Data Area | A step: its target doctype, its columns, when it applies |
 | Embark Question | An interview question, its choices and when it is asked |
 | Embark Onboarding | One customer: their answers, company details, progress |
@@ -75,8 +73,7 @@ bench --site <site> install-app embark
 ```
 
 The site needs ERPNext, because the checks read ERPNext's doctypes. Installing
-creates the roles **Embark Consultant** and **Embark Customer**, the four
-packages, the data steps and the interview questions, all editable afterwards.
+creates the data steps and the interview questions, all editable afterwards.
 
 Open `/embark` on the site as the administrator to start the onboarding.
 

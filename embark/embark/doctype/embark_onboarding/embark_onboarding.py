@@ -4,10 +4,8 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import cint
 
 from embark.conditions import applies
-from embark.permissions import is_staff
 
 # What the customer must answer before the company can be created. The rest of
 # the company section is useful but never blocks readiness.
@@ -23,15 +21,14 @@ class EmbarkOnboarding(Document):
 		self.sync_areas()
 		self.set_abbr()
 		self.refresh_areas()
-		self.guard_status()
+		self.advance_status()
 
 	def guard_locked(self):
+		"""Once sent for review the data is read-only; returning it opens it again."""
 		before = self.get_doc_before_save()
-		if before and before.status in LOCKED_STATUSES and not is_staff():
+		if before and before.status in LOCKED_STATUSES and self.status == before.status:
 			frappe.throw(
-				_(
-					"Your data has been sent for review, so it can't be changed now. Ask your consultant to return it if something needs fixing."
-				),
+				_("This onboarding has been sent for review. Return it first to make changes."),
 				title=_("Sent for review"),
 			)
 
@@ -39,29 +36,29 @@ class EmbarkOnboarding(Document):
 		return {row.question: row.answer for row in self.answers if row.answer not in (None, "")}
 
 	def sync_areas(self):
-		"""The package sets what is in scope; the answers decide what of it is asked for.
+		"""The answers decide which steps this customer is asked for.
 
 		A step the customer has already uploaded to is kept even if their answers
 		later say it does not apply, so nothing they did quietly disappears.
 		"""
-		package = frappe.get_cached_doc("Embark Package", self.package)
 		answers = self.answer_map()
 		existing = {row.data_area: row for row in self.areas}
 		wanted = []
-		for row in package.areas:
-			area = frappe.get_cached_doc("Embark Data Area", row.data_area)
-			kept = existing.get(row.data_area)
+		for area in frappe.get_all(
+			"Embark Data Area", fields=["name", "required", "applies_when"], order_by="sequence asc"
+		):
+			kept = existing.get(area.name)
 			if applies(area.applies_when, answers) or (kept and kept.upload):
-				wanted.append((row.data_area, row.required))
+				wanted.append(area)
 
 		self.set("areas", [])
-		for data_area, required in wanted:
-			old = existing.get(data_area)
+		for area in wanted:
+			old = existing.get(area.name)
 			self.append(
 				"areas",
 				{
-					"data_area": data_area,
-					"required": required,
+					"data_area": area.name,
+					"required": area.required,
 					"status": old.status if old else "Not Started",
 					"rows": old.rows if old else 0,
 					"errors": old.errors if old else 0,
@@ -127,24 +124,10 @@ class EmbarkOnboarding(Document):
 		)
 		self.readiness = round(100 * done / (2 + len(required)))
 
+	def advance_status(self):
+		"""Draft until someone starts filling it in."""
+		if self.status == "Draft" and (self.answers or self.readiness):
+			self.status = "In Progress"
+
 	def company_complete(self) -> bool:
 		return all(self.get(f) for f in COMPANY_FIELDS)
-
-	def guard_status(self):
-		before = self.get_doc_before_save()
-		old = before.status if before else "Draft"
-		if is_staff():
-			return
-
-		# Any change the customer makes means the work is under way.
-		if self.status == old and old in ("Draft", "Returned"):
-			self.status = "In Progress"
-			return
-		if self.status == old:
-			return
-
-		if self.status == "Submitted" and cint(self.readiness) == 100:
-			return
-		if self.status == "In Progress" and old in ("Draft", "Returned"):
-			return
-		frappe.throw(_("You can't change the status of this onboarding."))

@@ -1,12 +1,12 @@
 <template>
-	<StartOnboarding v-if="o && o.needs_start" :packages="o.packages" @invited="(r) => (state.invite = r)" />
+	<StartOnboarding v-if="o && o.needs_start" />
 	<div v-else-if="o" class="space-y-6">
 		<ConsultantPanel v-if="o.is_staff" :o="o" />
 		<div>
 			<h1 class="text-2xl font-semibold text-ink-gray-9">Let's get {{ o.client_name }} ready for ERPNext</h1>
 			<p class="mt-2 text-base leading-relaxed text-ink-gray-6">
-				Work through the steps below. We check your data as you go, so the implementation hours can be
-				spent setting up ERPNext, not fixing spreadsheets.
+				Work through the steps below. We check your data as you go, so setting up ERPNext goes quickly
+				instead of turning into spreadsheet archaeology.
 			</p>
 		</div>
 
@@ -23,15 +23,7 @@
 		</Callout>
 
 		<div class="rounded-lg border border-outline-gray-2 p-5">
-			<div class="flex flex-wrap items-start justify-between gap-4">
-				<div>
-					<div class="text-sm text-ink-gray-5">Your implementation package</div>
-					<div class="mt-1 text-lg font-semibold text-ink-gray-9">{{ o.package.name }}</div>
-					<div class="text-base text-ink-gray-7">{{ o.package.modules }}</div>
-				</div>
-				<Badge theme="blue" size="lg" :label="`${Number(o.package.hours)} hours`" />
-			</div>
-			<div class="mt-5">
+			<div>
 				<div class="mb-2 flex items-baseline justify-between text-base">
 					<span class="font-medium text-ink-gray-8">Readiness</span>
 					<span class="tabular-nums text-ink-gray-6">

@@ -19,9 +19,6 @@ try:  # v16
 except ImportError:  # v15
 	from frappe.tests.utils import FrappeTestCase as TestCase
 
-CUSTOMER = "ft-customer@example.com"
-OTHER = "ft-other@example.com"
-
 
 def xlsx(rows) -> bytes:
 	wb = Workbook()
@@ -94,20 +91,11 @@ class TestConditions(TestCase):
 class TestOnboardingFlow(TestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")
+		frappe.db.delete("Embark Upload")
+		frappe.db.delete("Embark Onboarding")
 		self.onboarding = frappe.get_doc(
-			# Administrator as consultant: a user whose name is not an email address.
-			{
-				"doctype": "Embark Onboarding",
-				"client_name": "Sunrise Traders",
-				"package": "Package 1",
-				"consultant": "Administrator",
-			}
+			{"doctype": "Embark Onboarding", "client_name": "Sunrise Traders", "consultant": "Administrator"}
 		).insert()
-		api.invite_customer(self.onboarding.name, CUSTOMER, "Asha", send_email=0)
-		self.other = frappe.get_doc(
-			{"doctype": "Embark Onboarding", "client_name": "Other Co", "package": "Package 1"}
-		).insert()
-		api.invite_customer(self.other.name, OTHER, "Omar", send_email=0)
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
@@ -147,9 +135,6 @@ class TestOnboardingFlow(TestCase):
 		return api.attach_file(self.onboarding.name, area, f.file_url)
 
 	def test_customer_journey(self):
-		frappe.set_user(CUSTOMER)
-		self.assertEqual(frappe.db.get_value("User", CUSTOMER, "user_type"), "Website User")
-
 		overview = api.get_overview()
 		self.assertEqual(overview["name"], self.onboarding.name)
 		self.assertEqual(overview["readiness"], 0)
@@ -232,19 +217,12 @@ class TestOnboardingFlow(TestCase):
 		self.assertEqual(overview["readiness"], 100, overview["steps"])
 		self.assertTrue(overview["can_submit"])
 
-		# A customer cannot approve themselves or change consultant-owned fields.
-		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
-		doc.status = "Approved"
-		self.assertRaises(frappe.ValidationError, doc.save)
-		doc.reload()
-		doc.package = "Package 2"
-		doc.save()
-		self.assertEqual(frappe.db.get_value("Embark Onboarding", doc.name, "package"), "Package 1")
-
 		overview = api.submit_for_review(self.onboarding.name)
 		self.assertEqual(overview["status"], "Submitted")
 		self.assertTrue(overview["locked"])
 		self.assertRaises(frappe.ValidationError, self.upload, "Users", [["Email"], ["x@y.com"]])
+		api.review(self.onboarding.name, "Returned", "One more thing")
+		self.upload("Users", [["Name", "Email"], ["Asha", "asha@sunrise.com"]])  # open again
 
 		# The consultant gets ERPNext-shaped files.
 		frappe.set_user("Administrator")
@@ -261,11 +239,9 @@ class TestOnboardingFlow(TestCase):
 		self.assertEqual(
 			api.review(self.onboarding.name, "Returned", "Add your price list")["status"], "Returned"
 		)
-		frappe.set_user(CUSTOMER)
 		self.assertEqual(api.get_overview()["review_notes"], "Add your price list")
 
 	def test_remove_file(self):
-		frappe.set_user(CUSTOMER)
 		self.upload("Units of Measure", [["Unit"], ["Carton"]])
 		self.assertEqual(self.step("Units of Measure")["status"], "Ready")
 		area = api.remove_file(self.onboarding.name, "Units of Measure")
@@ -281,61 +257,33 @@ class TestOnboardingFlow(TestCase):
 	def step(self, area):
 		return next(s for s in api.get_overview(self.onboarding.name)["steps"] if s["area"] == area)
 
-	def test_customers_are_isolated(self):
-		frappe.set_user(OTHER)
-		self.assertEqual(api.get_overview()["name"], self.other.name)
-		self.assertRaises(frappe.PermissionError, api.get_overview, self.onboarding.name)
-		self.assertRaises(frappe.PermissionError, api.get_area, self.onboarding.name, "Items")
-		self.assertEqual(
-			frappe.get_list("Embark Onboarding", pluck="name"),
-			[self.other.name],
-		)
-		self.assertRaises(frappe.PermissionError, api.download_prepared_data, self.other.name)
-		self.assertRaises(frappe.PermissionError, api.invite_customer, self.other.name, "x@example.com", "X")
-
 	def test_file_must_belong_to_the_onboarding(self):
-		frappe.set_user(OTHER)
-		f = frappe.get_doc(
+		other = frappe.get_doc(
 			{
 				"doctype": "File",
-				"file_name": "theirs.xlsx",
+				"file_name": "elsewhere.xlsx",
 				"content": xlsx([["Email"], ["a@b.com"]]),
 				"is_private": 1,
-				"attached_to_doctype": "Embark Onboarding",
-				"attached_to_name": self.other.name,
+				"attached_to_doctype": "User",
+				"attached_to_name": "Administrator",
 			}
 		).insert()
-		frappe.set_user(CUSTOMER)
-		self.assertRaises(frappe.ValidationError, api.attach_file, self.onboarding.name, "Users", f.file_url)
+		self.assertRaises(
+			frappe.ValidationError, api.attach_file, self.onboarding.name, "Users", other.file_url
+		)
 
-	def test_consultant_starts_the_onboarding(self):
-		# Embark runs on the customer's own site: one onboarding, started by the consultant.
+	def test_start_onboarding(self):
+		"""One site, one onboarding, started by a System Manager."""
 		frappe.db.delete("Embark Upload")
 		frappe.db.delete("Embark Onboarding")
 		self.assertTrue(api.get_overview()["needs_start"])
 
-		frappe.set_user(CUSTOMER)
-		self.assertRaises(
-			frappe.PermissionError,
-			api.start_onboarding,
-			"Yasir Traders",
-			"Package 1",
-			"yasir@example.com",
-			"Yasir",
-		)
-
-		frappe.set_user("Administrator")
-		result = api.start_onboarding(
-			"Yasir Traders", "Package 1", "yasir@example.com", "Yasir", send_email=0
-		)
-		self.assertEqual(result["overview"]["client_name"], "Yasir Traders")
-		self.assertEqual(result["overview"]["portal_user"], "yasir@example.com")
-		self.assertIn("update-password", result["invite"]["setup_link"])
-		self.assertEqual(frappe.db.get_value("User", "yasir@example.com", "user_type"), "Website User")
-		self.assertEqual(api.get_overview()["name"], result["overview"]["name"])
-		self.assertRaises(
-			frappe.ValidationError, api.start_onboarding, "Again", "Package 1", "x@example.com", "X"
-		)
+		overview = api.start_onboarding("Yasir Traders")["overview"]
+		self.assertEqual(overview["client_name"], "Yasir Traders")
+		self.assertEqual(api.get_overview()["name"], overview["name"])
+		# Every step the answers allow is offered from the start.
+		self.assertIn("Items", [s["area"] for s in overview["steps"]])
+		self.assertRaises(frappe.ValidationError, api.start_onboarding, "Someone Else")
 
 	def test_standard_values_before_setup(self):
 		from unittest.mock import patch
@@ -362,31 +310,7 @@ class TestOnboardingFlow(TestCase):
 		self.assertEqual(known["UOM"].get("nos"), "Nos")
 		self.assertEqual(known["Item Group"].get("products"), "Products")
 
-	def test_desk_access(self):
-		frappe.set_user("Administrator")
-		api.invite_customer(self.onboarding.name, CUSTOMER, "Asha", send_email=0, desk_access=1)
-		user = frappe.get_doc("User", CUSTOMER)
-		roles = {r.role for r in user.roles}
-		self.assertEqual(user.user_type, "System User")
-		self.assertTrue({"Embark Customer", "Sales User", "Stock User"} <= roles)
-		self.assertNotIn("System Manager", roles)
-		if user.meta.has_field("default_app"):
-			self.assertEqual(user.default_app, "embark")  # they still land in Embark
-
-		frappe.set_user(CUSTOMER)
-		self.assertTrue(api.get_overview()["can_use_desk"])
-		self.assertRaises(frappe.PermissionError, api.review, self.onboarding.name, "Approved")
-
-		# Back to portal only: the desk roles go, the portal role stays.
-		frappe.set_user("Administrator")
-		api.invite_customer(self.onboarding.name, CUSTOMER, "Asha", send_email=0, desk_access=0)
-		user.reload()
-		self.assertEqual(user.user_type, "Website User")
-		self.assertEqual({r.role for r in user.roles} & {"Sales User", "Stock User"}, set())
-		self.assertIn("Embark Customer", {r.role for r in user.roles})
-
 	def test_interview_shapes_the_onboarding(self):
-		frappe.set_user(CUSTOMER)
 
 		def steps():
 			return [s["area"] for s in api.get_overview(self.onboarding.name)["steps"]]
@@ -431,7 +355,6 @@ class TestOnboardingFlow(TestCase):
 		self.assertRaises(frappe.ValidationError, api.save_answers, self.onboarding.name, {"nope": "yes"})
 
 	def test_template_download(self):
-		frappe.set_user(CUSTOMER)
 		api.download_template("Customers", self.onboarding.name)
 		wb = load_workbook(io.BytesIO(frappe.response.filecontent))
 		self.assertEqual(wb.sheetnames[1], "How to fill")
