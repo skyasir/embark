@@ -165,6 +165,11 @@ def config() -> dict:
 
 @frappe.whitelist()
 def status() -> dict:
+	from embark import copilot_flow
+
+	if copilot_flow.available():
+		return {"on": True, "provider": "Frappe Flow", "model": copilot_flow.model_name()}
+
 	settings = config()
 	return {
 		"on": bool(settings["model"] and (settings["base_url"] or settings["provider"] == "Anthropic")),
@@ -177,6 +182,14 @@ def status() -> dict:
 def chat(message: str, history: str | list | None = None, images: str | list | None = None) -> dict:
 	"""One turn. Returns what to say, and the change set if one was proposed."""
 	copilot._studio_user()
+
+	# Where the site runs Frappe Flow, Flow runs the conversation: same tools,
+	# same change set, one engine less of ours to keep.
+	from embark import copilot_flow
+
+	if copilot_flow.available():
+		return copilot_flow.chat(message, frappe.parse_json(history) or [])
+
 	if not status()["on"]:
 		frappe.throw(_("No AI is configured on this bench yet."))
 
