@@ -402,6 +402,15 @@ class TestOnboardingFlow(TestCase):
 		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
 		self.assertEqual(doc.answer_map()["keeps_stock"], "no")
 
+	def test_a_mangled_tool_call_is_still_read(self):
+		"""What a small model actually writes, quotes and all."""
+		from embark import llm
+
+		mangled = '{"name":"save_answers","parameters":{"answers":"{"keeps_stock":"yes"}}}'
+		calls = llm.recovered_calls(mangled)
+		self.assertEqual(calls[0]["name"], "save_answers")
+		self.assertEqual(calls[0]["arguments"], {"answers": {"keeps_stock": "yes"}})
+
 	def test_only_what_was_said_goes_back_to_the_model(self):
 		"""The panel draws tool steps beside the talk; they are not conversation."""
 		history = [

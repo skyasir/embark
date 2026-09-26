@@ -118,11 +118,27 @@ def ask(onboarding: str, message: str, history: list[dict] | None = None) -> dic
 	steps: list[dict] = []
 	pending: list[dict] = []
 	extra = studio_tools()
+	nudged = False
 	for _round in range(MAX_ROUNDS):
 		reply = _complete(messages, extra)
 		calls = reply["tool_calls"] or recovered_calls(reply["text"])
 		if not calls:
 			text = reply["text"]
+			if looks_like_plumbing(text) and not nudged:
+				# It tried to call a tool and made a mess of it. Ask once for
+				# the call itself before giving up on the turn.
+				nudged = True
+				messages.append({"role": "assistant", "content": text})
+				messages.append(
+					{
+						"role": "user",
+						"content": (
+							"Use the tool itself rather than writing the call out, and use only "
+							"the question keys from open_questions."
+						),
+					}
+				)
+				continue
 			if looks_like_plumbing(text):
 				# Never show the machinery: say something true instead.
 				text = _("Sorry, I did not follow that. Could you say it another way?")
