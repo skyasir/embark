@@ -37,11 +37,10 @@
    "reqd": 1
   },
   {
-   "description": "The field that identifies a record, e.g. item_code. Used to find duplicates and to check links from other sheets.",
+   "description": "The column that identifies a row, used to spot duplicates. Leave blank when rows can legitimately repeat.",
    "fieldname": "key_field",
    "fieldtype": "Data",
-   "label": "Unique Field",
-   "reqd": 1
+   "label": "Unique Field"
   },
   {
    "description": "Order of the step on the customer's screen.",

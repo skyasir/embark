@@ -143,7 +143,8 @@ class TestOnboardingFlow(TestCase):
 		# Nothing is asked for until the interview has been answered.
 		self.assertEqual(overview["steps"], [])
 
-		self.answer_interview()
+		# A trader, so the plan holds no workstations or operations.
+		self.answer_interview(manufactures="no", subcontracts="no")
 		overview = api.get_overview(self.onboarding.name)
 		self.assertTrue(overview["interview"]["done"])
 		self.assertEqual([s["area"] for s in overview["steps"]][:2], ["Users", "Item Groups"])
