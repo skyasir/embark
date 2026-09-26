@@ -139,6 +139,7 @@ import Assistant from "./components/Assistant.vue"
 import Callout from "./components/Callout.vue"
 import NavLink from "./components/NavLink.vue"
 import { loadOverview, state } from "./data/store"
+import { applyTheme, setTheme, theme, watchSystemTheme } from "./data/theme"
 
 const route = useRoute()
 const router = useRouter()
@@ -197,10 +198,23 @@ const appMenu = computed(() => [
 		: []),
 ])
 
+const themeMenu = computed(() =>
+	[
+		{ label: "System theme", value: "system", icon: "monitor" },
+		{ label: "Light", value: "light", icon: "sun" },
+		{ label: "Dark", value: "dark", icon: "moon" },
+	].map((choice) => ({
+		label: theme.value === choice.value ? `${choice.label} ✓` : choice.label,
+		icon: choice.icon,
+		onClick: () => setTheme(choice.value),
+	}))
+)
+
 const userMenu = computed(() => [
 	...(overview.value?.can_use_desk
 		? [{ label: "Switch to Desk", icon: "grid", onClick: () => (window.location.href = "/app") }]
 		: []),
+	...themeMenu.value,
 	{ label: "Log out", icon: "log-out", onClick: logout },
 ])
 
@@ -217,5 +231,9 @@ async function logout() {
 	}
 }
 
-onMounted(loadOverview)
+onMounted(() => {
+	applyTheme()
+	watchSystemTheme()
+	loadOverview()
+})
 </script>

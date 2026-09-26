@@ -23,6 +23,7 @@ import requests
 from frappe import _
 
 from embark import copilot
+from embark.llm import looks_like_plumbing, recovered_calls
 
 MAX_ROUNDS = 8
 TIMEOUT = 120
@@ -188,6 +189,10 @@ def chat(message: str, history: str | list | None = None, images: str | list | N
 	nudged = False
 	for _round in range(MAX_ROUNDS):
 		reply = _complete(messages)
+		# A model that wrote its tool call into the message meant to make it.
+		reply["tool_calls"] = reply["tool_calls"] or recovered_calls(reply["text"])
+		if reply["tool_calls"]:
+			reply["text"] = ""
 		if not reply["tool_calls"] and not pending and not nudged:
 			# A small model will sometimes describe the change instead of making
 			# it. One nudge, then take it at its word.
@@ -206,7 +211,7 @@ def chat(message: str, history: str | list | None = None, images: str | list | N
 			change_set = copilot.propose(_title(request), request, pending) if pending else None
 			# A model will happily say it made a change that was refused. If
 			# nothing came of the turn, the refusal is the honest answer.
-			text = reply["text"]
+			text = "" if looks_like_plumbing(reply["text"]) else reply["text"]
 			if not change_set and errors:
 				text = _("I could not do that: {0}").format(errors[-1])
 			return {"reply": text, "change_set": change_set, "pending": []}
