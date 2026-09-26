@@ -10,7 +10,7 @@ import zipfile
 import frappe
 from openpyxl import Workbook, load_workbook
 
-from embark import api
+from embark import api, assistant
 from embark.conditions import applies
 from embark.engine import Column, build_columns, coerce, match_columns, split_header
 
@@ -344,6 +344,63 @@ class TestOnboardingFlow(TestCase):
 
 		self.answer_interview()
 		self.assertIn("Items", steps())
+
+	def test_assistant_is_off_until_a_provider_is_configured(self):
+		self.assertFalse(assistant.is_on())
+		self.assertFalse(api.get_overview(self.onboarding.name)["assistant"])
+		self.assertRaises(frappe.ValidationError, api.ask, "hello", self.onboarding.name)
+
+	def test_assistant_answers_the_interview_and_nothing_else(self):
+		from unittest.mock import patch
+
+		frappe.db.set_single_value(
+			"Embark Settings",
+			{
+				"assistant_enabled": 1,
+				"provider": "OpenAI compatible",
+				"model": "stub",
+				"base_url": "http://stub.invalid/v1",
+			},
+		)
+		frappe.clear_cache(doctype="Embark Settings")
+		self.assertTrue(assistant.is_on())
+
+		# The model looks at what is open, saves what the customer described,
+		# then answers in words.
+		turns = [
+			{
+				"text": "",
+				"raw": {"role": "assistant"},
+				"tool_calls": [{"id": "1", "name": "open_questions", "arguments": {}}],
+			},
+			{
+				"text": "",
+				"raw": {"role": "assistant"},
+				"tool_calls": [
+					{
+						"id": "2",
+						"name": "save_answers",
+						"arguments": {"answers": {"keeps_stock": "no", "business_type": "services"}},
+					}
+				],
+			},
+			{"text": "Noted: services, no stock.", "raw": {"role": "assistant"}, "tool_calls": []},
+		]
+		with patch.object(assistant, "_complete", side_effect=turns):
+			result = api.ask("We're a services firm, we hold no stock.", self.onboarding.name)
+
+		self.assertEqual(result["reply"], "Noted: services, no stock.")
+		self.assertEqual(result["used"], ["open_questions", "save_answers"])
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		self.assertEqual(doc.answer_map()["keeps_stock"], "no")
+		# It went through save_answers, so the same validation applies to it.
+		self.assertEqual(
+			assistant._run_tool(self.onboarding.name, "save_answers", {"answers": {"nope": "yes"}}).get(
+				"error"
+			)
+			is not None,
+			True,
+		)
 
 	def test_the_plan_is_generated_from_the_answers(self):
 

@@ -18,6 +18,7 @@ import frappe
 from frappe import _
 from frappe.utils import cstr, flt, get_fullname, validate_email_address
 
+from embark import assistant
 from embark.conditions import applies
 from embark.embark.doctype.embark_onboarding.embark_onboarding import (
 	LOCKED_STATUSES,
@@ -108,8 +109,18 @@ def get_overview(onboarding: str | None = None) -> dict:
 		"can_use_desk": _can_use_desk(),
 		"has_data": any(row.rows for row in doc.areas),
 		"tally": _tally(doc),
+		"assistant": assistant.is_on(),
 		"user": {"name": frappe.session.user, "full_name": get_fullname(frappe.session.user)},
 	}
+
+
+@frappe.whitelist()
+def ask(message: str, onboarding: str | None = None, history: str | list | None = None) -> dict:
+	"""One turn of the chat, which can only answer the interview."""
+	doc = _get_onboarding(onboarding, "write")
+	if _locked(doc):
+		frappe.throw(_("This onboarding has been sent for review."))
+	return assistant.ask(doc.name, message, frappe.parse_json(history) if history else [])
 
 
 @frappe.whitelist()

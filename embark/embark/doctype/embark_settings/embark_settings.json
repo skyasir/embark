@@ -1,0 +1,87 @@
+{
+ "actions": [],
+ "creation": "2026-09-26 18:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "assistant_enabled",
+  "provider",
+  "model",
+  "column_break_1",
+  "base_url",
+  "api_key",
+  "section_1",
+  "help_html"
+ ],
+ "fields": [
+  {
+   "default": "0",
+   "description": "Off by default. With it off, Embark shows no chat at all and works exactly as it does now.",
+   "fieldname": "assistant_enabled",
+   "fieldtype": "Check",
+   "label": "Chat Assistant"
+  },
+  {
+   "default": "OpenAI compatible",
+   "description": "\"OpenAI compatible\" covers OpenAI, Ollama, vLLM, LiteLLM and anything else that serves /chat/completions — including a Huf gateway.",
+   "fieldname": "provider",
+   "fieldtype": "Select",
+   "label": "Provider",
+   "options": "OpenAI compatible\nAnthropic"
+  },
+  {
+   "description": "For example gpt-4o-mini, claude-sonnet-5 or llama3.1.",
+   "fieldname": "model",
+   "fieldtype": "Data",
+   "label": "Model"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "For example https://api.openai.com/v1 or http://localhost:11434/v1.",
+   "fieldname": "base_url",
+   "fieldtype": "Data",
+   "label": "Base URL"
+  },
+  {
+   "fieldname": "api_key",
+   "fieldtype": "Password",
+   "label": "API Key"
+  },
+  {
+   "fieldname": "section_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "help_html",
+   "fieldtype": "HTML",
+   "options": "<p class=\"text-muted\">The assistant can only read the interview and save answers to it. It never writes to ERPNext, and it never decides the plan — the plan comes from the answers, by the same rules as before.</p>"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-09-26 18:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Embark",
+ "name": "Embark Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

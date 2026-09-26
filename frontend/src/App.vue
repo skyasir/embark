@@ -71,6 +71,7 @@
 			</main>
 		</div>
 	</div>
+	<Assistant v-if="overview && !overview.needs_start" />
 	<Toast />
 </template>
 
@@ -79,6 +80,7 @@ import { computed, onMounted, watchEffect } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { Avatar, Dropdown, FeatherIcon, LoadingIndicator, Toast, call } from "frappe-ui"
 
+import Assistant from "./components/Assistant.vue"
 import Callout from "./components/Callout.vue"
 import NavLink from "./components/NavLink.vue"
 import { loadOverview, state } from "./data/store"
