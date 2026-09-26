@@ -2,35 +2,70 @@
 
 *Get your data ready for ERPNext.*
 
-Gets a customer's data ready **before** a fixed-hour, standard ERPNext
+Embark prepares a customer's data **before** a fixed-hour, standard ERPNext
 implementation starts, so the implementation hours go on configuration and
 training rather than on chasing spreadsheets.
 
-Once the customer accepts the implementation plan, a consultant creates an
-**Embark Onboarding** for their package and invites them. The customer signs
-in to a simple portal at `/embark` that shows only the steps their package
-needs:
+It runs on the customer's own ERPNext site. When they buy an implementation
+package you create their site with Embark installed and hand it over, usually
+before ERPNext's setup wizard has been run.
 
-1. **Company details**: name, country, currency, financial year and tax number.
-2. **One step per data area** (Users, Warehouses, Customers, Suppliers, Items and
-   so on). The customer downloads a template or uploads their own sheet. The
-   tool matches their columns to ERPNext fields and checks every row. Problems
-   are explained in plain language and can be fixed on screen.
-3. **Send for review**, available when every required step is ready.
+### The customer's journey
 
-The consultant then reviews the onboarding in the desk, approves it or returns
-it with notes, and downloads the prepared data as ERPNext-shaped Excel files.
+1. **Tell us about your business.** A short interview: what the business does,
+   whether it keeps stock, makes anything, sells from orders, tracks batches or
+   serial numbers, is tax registered. Follow-up questions appear only when they
+   are relevant, and "Not sure" is always allowed.
+2. **Company details**: name, country, currency, financial year and tax number.
+3. **One step per kind of data** (Users, Warehouses, Customers, Suppliers,
+   Items and so on) — but only the steps and columns the answers call for. A
+   business that keeps no stock is never asked for warehouses, and an item
+   sheet carries batch or serial columns only if they track them.
+4. **Send for review**, once every required step is clean.
+
+For each step the customer downloads a generated Excel template or uploads the
+file they already keep. Their headings are matched to ERPNext fields, every row
+is checked, and problems are explained in plain language and fixed on screen.
+
+### The consultant's side
+
+A new site shows only ERPNext's setup wizard in the desk, so everything you
+need before setup is in Embark itself: start the onboarding for a package,
+invite the customer, review the data, approve it or return it with notes, and
+download it in ERPNext's own shape. After setup the same record is available in
+the desk as well.
+
+Customers get a **portal-only** login, or **portal + desk**: the ERPNext roles
+of their package, never System Manager. Either way they land in Embark.
 
 ### How the checks work
 
-Each data area points at a real ERPNext doctype. The rules come from that
+Each data step points at a real ERPNext doctype, and the rules come from that
 doctype's own meta: required fields, dropdown choices, field types and links.
 Links are checked across the customer's own sheets (an item's group must be in
-the Item Groups sheet or be one of ERPNext's standard groups), so broken
-references are caught before anything reaches ERPNext.
+their Item Groups sheet, or be one of ERPNext's standard groups). On a site
+whose setup wizard has not run yet, the standard units and groups that the
+wizard will create are accepted, so "Nos" or "Commercial" are not flagged.
 
 Nothing is written to ERPNext by this app. The customer's file is never
-modified; fixes made on screen are stored separately and applied on every read.
+modified; fixes made on screen are stored beside it and applied on every read.
+
+### Configuration, not code
+
+Packages, data steps, their columns, the interview questions and the conditions
+that decide when each applies are all records you edit in the desk:
+
+| Record | Holds |
+|---|---|
+| Embark Package | Hours, modules, its data steps and the desk roles it grants |
+| Embark Data Area | A step: its target doctype, its columns, when it applies |
+| Embark Question | An interview question, its choices and when it is asked |
+| Embark Onboarding | One customer: their answers, company details, progress |
+| Embark Upload | One uploaded file, its column matching and its check results |
+
+A condition is a short line read against the answers, for example
+`keeps_stock == yes and tracks_batches == yes`. An unanswered or "Not sure"
+question leaves the step visible, so nothing is skipped silently.
 
 ### Setup
 
@@ -39,16 +74,22 @@ bench get-app <repo-url>
 bench --site <site> install-app embark
 ```
 
-The onboarding site needs ERPNext installed, because the checks read ERPNext's
-doctypes. Installing creates two roles, **Embark Consultant** and
-**Embark Customer**, plus the four packages and seven data areas of the
-fast-track plan. Both packages and data areas can be edited in the desk.
+The site needs ERPNext, because the checks read ERPNext's doctypes. Installing
+creates the roles **Embark Consultant** and **Embark Customer**, the four
+packages, the data steps and the interview questions, all editable afterwards.
 
-To rebuild the portal after changing `frontend/`:
+Open `/embark` on the site as the administrator to start the onboarding.
+
+### Development
 
 ```bash
-cd apps/embark/frontend && yarn install && yarn build
+cd apps/embark && yarn install     # installs and builds the portal
+cd frontend && yarn dev            # or run the portal against a bench
+bench --site <site> run-tests --app embark
 ```
+
+Do not run the test suite against a site you are keeping as a demo: it commits
+as it goes, clears onboardings and completes the setup wizard.
 
 ### Compatibility
 
