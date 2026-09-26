@@ -172,6 +172,19 @@ class CheckResult:
 # ── Columns ───────────────────────────────────────────────────────────────────
 
 
+def asked_keys(answers: dict[str, str]) -> set[str]:
+	"""The questions the customer is actually being asked, given the answers.
+
+	Conditions on anything outside this set read false: the interview has already
+	ruled that branch out, so there is nothing to keep open for.
+	"""
+	return {
+		q.name
+		for q in frappe.get_all("Embark Question", filters={"is_active": 1}, fields=["name", "applies_when"])
+		if applies(q.applies_when, answers)
+	}
+
+
 def build_columns(area, answers: dict[str, str] | None = None) -> list[Column]:
 	"""Typed columns for a data step, from the target doctype's meta.
 
@@ -179,9 +192,10 @@ def build_columns(area, answers: dict[str, str] | None = None) -> list[Column]:
 	does not track them) are left out of the template and the checks.
 	"""
 	meta = frappe.get_meta(area.target_doctype)
+	asked = asked_keys(answers) if answers else None
 	columns = []
 	for row in area.fields:
-		if not applies(row.applies_when, answers or {}):
+		if not applies(row.applies_when, answers or {}, asked):
 			continue
 		df = meta.get_field(row.fieldname)
 		if df:

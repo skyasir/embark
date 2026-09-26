@@ -6,6 +6,7 @@ from frappe import _
 from frappe.model.document import Document
 
 from embark.conditions import applies
+from embark.engine import asked_keys
 
 # What the customer must answer before the company can be created. The rest of
 # the company section is useful but never blocks readiness.
@@ -19,6 +20,7 @@ class EmbarkOnboarding(Document):
 	def validate(self):
 		self.guard_locked()
 		self.sync_areas()
+		self.sync_tasks()
 		self.set_abbr()
 		self.refresh_areas()
 		self.advance_status()
@@ -44,6 +46,7 @@ class EmbarkOnboarding(Document):
 		does not apply, so nothing they did quietly disappears.
 		"""
 		answers = self.answer_map()
+		asked = asked_keys(answers)
 		existing = {row.data_area: row for row in self.areas}
 		# Once the checklist exists it keeps up with the answers; before that it
 		# takes a finished interview to build one, so a half-answered interview
@@ -54,7 +57,7 @@ class EmbarkOnboarding(Document):
 			"Embark Data Area", fields=["name", "required", "applies_when"], order_by="sequence asc"
 		):
 			kept = existing.get(area.name)
-			if (planned and applies(area.applies_when, answers)) or (kept and kept.upload):
+			if (planned and applies(area.applies_when, answers, asked)) or (kept and kept.upload):
 				wanted.append(area)
 
 		self.set("areas", [])
@@ -70,6 +73,44 @@ class EmbarkOnboarding(Document):
 					"errors": old.errors if old else 0,
 					"warnings": old.warnings if old else 0,
 					"upload": old.upload if old else None,
+				},
+			)
+
+	def sync_tasks(self):
+		"""The rest of the plan: what we switch on, decide and train, from the answers.
+
+		Built by the same rules as the data steps, so the whole plan is the
+		interview's doing. A line the consultant has already dealt with is kept,
+		whatever the answers say now.
+		"""
+		answers = self.answer_map()
+		asked = asked_keys(answers)
+		existing = {row.setup_task: row for row in self.tasks}
+		planned = bool(self.areas or self.tasks) or self.interview()["done"]
+		wanted = []
+		for task in frappe.get_all(
+			"Embark Setup Task",
+			filters={"is_active": 1},
+			fields=["name", "title", "kind", "applies_when", "because"],
+			order_by="sequence asc",
+		):
+			kept = existing.get(task.name)
+			settled = kept and kept.status != "Planned"
+			if (planned and applies(task.applies_when, answers, asked)) or settled:
+				wanted.append(task)
+
+		self.set("tasks", [])
+		for task in wanted:
+			old = existing.get(task.name)
+			self.append(
+				"tasks",
+				{
+					"setup_task": task.name,
+					"title": task.title,
+					"kind": task.kind,
+					"because": task.because,
+					"status": old.status if old else "Planned",
+					"notes": old.notes if old else None,
 				},
 			)
 

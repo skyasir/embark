@@ -70,6 +70,7 @@ TAX_ID = {
 AREAS = [
 	{
 		"area_name": "Users",
+		"because": "everyone who will use ERPNext needs a login",
 		"icon": "users",
 		"required": 1,
 		"target_doctype": "User",
@@ -116,6 +117,7 @@ AREAS = [
 	},
 	{
 		"area_name": "Item Groups",
+		"because": "how you group what you sell",
 		"icon": "layers",
 		"required": 0,
 		"target_doctype": "Item Group",
@@ -151,6 +153,7 @@ AREAS = [
 	},
 	{
 		"area_name": "Units of Measure",
+		"because": "the units you buy, sell and stock in",
 		"icon": "hash",
 		"required": 0,
 		"target_doctype": "UOM",
@@ -178,6 +181,7 @@ AREAS = [
 	},
 	{
 		"area_name": "Warehouses",
+		"because": "you keep stock",
 		"icon": "archive",
 		"required": 1,
 		"applies_when": "keeps_stock == yes",
@@ -212,6 +216,7 @@ AREAS = [
 	},
 	{
 		"area_name": "Customers",
+		"because": "you sell to them",
 		"icon": "user-check",
 		"required": 1,
 		"target_doctype": "Customer",
@@ -269,6 +274,7 @@ AREAS = [
 	},
 	{
 		"area_name": "Suppliers",
+		"because": "you buy from them",
 		"icon": "truck",
 		"required": 1,
 		"target_doctype": "Supplier",
@@ -313,6 +319,7 @@ AREAS = [
 	},
 	{
 		"area_name": "Items",
+		"because": "everything you buy, sell or make",
 		"icon": "package",
 		"required": 1,
 		"target_doctype": "Item",
@@ -516,6 +523,192 @@ QUESTIONS = [
 ]
 
 
+# The rest of the plan: what gets switched on, what the customer has to decide,
+# and what we train them on. Same conditions as the data steps, so the whole
+# checklist comes out of the interview.
+SETUP_TASKS = [
+	{
+		"task_key": "sales_flow",
+		"title": "Quotation and Sales Order",
+		"kind": "Setting",
+		"sequence": 10,
+		"applies_when": "sells_on_orders == yes",
+		"because": "you confirm sales before invoicing",
+		"description": "Selling runs quotation → order → delivery → invoice, instead of straight to an invoice.",
+		"detail": "Selling Settings, and the sales cycle the users are trained on.",
+	},
+	{
+		"task_key": "partial_delivery",
+		"title": "Part deliveries against one order",
+		"kind": "Setting",
+		"sequence": 20,
+		"applies_when": "delivers_partially == yes",
+		"because": "you deliver one order in more than one go",
+		"description": "An order stays open until everything on it has gone out.",
+		"detail": "Delivery Note against Sales Order, with the over-delivery allowance set.",
+	},
+	{
+		"task_key": "price_lists",
+		"title": "More than one price list",
+		"kind": "Setting",
+		"sequence": 30,
+		"applies_when": "price_lists == yes",
+		"because": "different customers get different prices",
+		"description": "Wholesale and retail rates, picked automatically for each customer.",
+		"detail": "Price Lists, Item Prices and the customer's default price list.",
+	},
+	{
+		"task_key": "purchase_flow",
+		"title": "Purchase Order",
+		"kind": "Setting",
+		"sequence": 40,
+		"applies_when": "buys_on_orders == yes",
+		"because": "you send purchase orders to suppliers",
+		"description": "Buying runs order → receipt → bill.",
+		"detail": "Buying Settings and the purchase cycle.",
+	},
+	{
+		"task_key": "partial_receipt",
+		"title": "Part receipts against one purchase order",
+		"kind": "Setting",
+		"sequence": 50,
+		"applies_when": "receives_partially == yes",
+		"because": "suppliers deliver one order in more than one go",
+		"description": "A purchase order stays open until everything has arrived.",
+		"detail": "Purchase Receipt against Purchase Order, with the over-receipt allowance.",
+	},
+	{
+		"task_key": "batches",
+		"title": "Batch tracking",
+		"kind": "Setting",
+		"sequence": 60,
+		"applies_when": "tracks_batches == yes",
+		"because": "you track batches or expiry dates",
+		"description": "Every movement of those items records which batch it was.",
+		"detail": "Stock Settings, and Has Batch No on the items that need it.",
+	},
+	{
+		"task_key": "serials",
+		"title": "Serial numbers",
+		"kind": "Setting",
+		"sequence": 70,
+		"applies_when": "tracks_serials == yes",
+		"because": "you track serial numbers",
+		"description": "Each unit is followed individually, in and out.",
+		"detail": "Stock Settings, and Has Serial No on the items that need it.",
+	},
+	{
+		"task_key": "manufacturing",
+		"title": "Bills of Material and Work Orders",
+		"kind": "Setting",
+		"sequence": 80,
+		"applies_when": "manufactures == yes",
+		"because": "you make or assemble goods yourself",
+		"description": "What goes into each product, and the jobs that make it.",
+		"detail": "Manufacturing Settings, BOMs, and Work Order against Sales Order if needed.",
+	},
+	{
+		"task_key": "subcontracting",
+		"title": "Subcontracting",
+		"kind": "Setting",
+		"sequence": 90,
+		"applies_when": "subcontracts == yes",
+		"because": "someone makes or finishes goods for you",
+		"description": "Material sent out to a supplier, and what comes back.",
+		"detail": "Subcontracting Order and Receipt, with the supplier warehouse.",
+	},
+	{
+		"task_key": "multi_currency",
+		"title": "A second currency",
+		"kind": "Setting",
+		"sequence": 100,
+		"applies_when": "multi_currency == yes",
+		"because": "you buy or sell in another currency",
+		"description": "Invoices in the customer's currency, books in yours.",
+		"detail": "Accounts Settings, exchange rates and the party's default currency.",
+	},
+	{
+		"task_key": "tax_setup",
+		"title": "Tax templates",
+		"kind": "Setting",
+		"sequence": 110,
+		"applies_when": "tax_registered == yes",
+		"because": "your business is registered for tax",
+		"description": "Tax worked out on each invoice, at the right rate.",
+		"detail": "Tax Categories and Sales/Purchase Taxes and Charges templates.",
+	},
+	{
+		"task_key": "costing_method",
+		"title": "How stock is valued",
+		"kind": "Decision",
+		"sequence": 200,
+		"applies_when": "keeps_stock == yes",
+		"because": "you keep stock",
+		"description": "FIFO or moving average. It changes what your stock is worth on paper.",
+		"detail": "Stock Settings > Default Valuation Method, before any stock is entered.",
+	},
+	{
+		"task_key": "document_numbering",
+		"title": "Document numbering",
+		"kind": "Decision",
+		"sequence": 210,
+		"because": "every business numbers its invoices its own way",
+		"description": "How your invoices, orders and receipts are numbered.",
+		"detail": "Naming series per doctype, agreed before go-live.",
+	},
+	{
+		"task_key": "who_submits",
+		"title": "Who may submit, who may only draft",
+		"kind": "Decision",
+		"sequence": 220,
+		"because": "someone has to be accountable for what leaves the system",
+		"description": "Which of your people can finalise an invoice or an order.",
+		"detail": "Standard roles per user, from the Users step.",
+	},
+	{
+		"task_key": "training_selling",
+		"title": "Selling, end to end",
+		"kind": "Training",
+		"sequence": 300,
+		"because": "your team has to run it after we leave",
+		"description": "Quotation to invoice, with your own data on screen.",
+	},
+	{
+		"task_key": "training_buying",
+		"title": "Buying, end to end",
+		"kind": "Training",
+		"sequence": 310,
+		"because": "your team has to run it after we leave",
+		"description": "Order to bill, with your own suppliers.",
+	},
+	{
+		"task_key": "training_stock",
+		"title": "Stock movements",
+		"kind": "Training",
+		"sequence": 320,
+		"applies_when": "keeps_stock == yes",
+		"because": "you keep stock",
+		"description": "Receipts, deliveries, transfers and what the stock reports tell you.",
+	},
+	{
+		"task_key": "training_manufacturing",
+		"title": "Making goods",
+		"kind": "Training",
+		"sequence": 330,
+		"applies_when": "manufactures == yes",
+		"because": "you make or assemble goods yourself",
+		"description": "BOM to work order to finished stock.",
+	},
+	{
+		"task_key": "training_reports",
+		"title": "The reports you will live in",
+		"kind": "Training",
+		"sequence": 340,
+		"because": "the system is only useful if you can read it",
+		"description": "Sales, stock and outstanding money, and how to filter them.",
+	},
+]
+
 # Embark's desk side: a tile on the apps screen and a sidebar for its records.
 # Both doctypes are v16-only, so a v15 site quietly skips them and reaches
 # Embark through the apps screen entry in hooks.py.
@@ -546,6 +739,10 @@ def seed():
 	for question in QUESTIONS:
 		if not frappe.db.exists("Embark Question", question["question_key"]):
 			frappe.get_doc({"doctype": "Embark Question", **question}).insert(ignore_permissions=True)
+
+	for task in SETUP_TASKS:
+		if not frappe.db.exists("Embark Setup Task", task["task_key"]):
+			frappe.get_doc({"doctype": "Embark Setup Task", **task}).insert(ignore_permissions=True)
 
 	for area in AREAS:
 		if not frappe.db.exists("Embark Data Area", area["area_name"]):
@@ -602,6 +799,9 @@ def _fill_blanks(area: dict):
 		changed = True
 	if area.get("icon") and not doc.icon:
 		doc.icon = area["icon"]
+		changed = True
+	if area.get("because") and not doc.because:
+		doc.because = area["because"]
 		changed = True
 	for row in doc.fields:
 		if wanted.get(row.fieldname) and not row.applies_when:

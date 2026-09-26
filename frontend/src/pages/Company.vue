@@ -8,6 +8,11 @@
 			</p>
 		</div>
 
+		<Callout v-if="o.company_from_erpnext" tone="success">
+			<strong>Taken from ERPNext.</strong> This site is already set up, so these came from your company
+			record instead of being asked again. Change anything that is wrong.
+		</Callout>
+
 		<Callout v-if="o.locked" tone="info">Your data is with your consultant, so it can't be changed now.</Callout>
 
 		<form class="ft-fill space-y-5" @submit.prevent="save">
