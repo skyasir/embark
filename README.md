@@ -12,10 +12,10 @@ One site, one onboarding.
 
 ### The customer's journey
 
-1. **Tell us about your business.** A short interview: what the business does,
-   whether it keeps stock, makes anything, sells from orders, tracks batches or
-   serial numbers, is tax registered. Follow-up questions appear only when they
-   are relevant, and "Not sure" is always allowed.
+1. **Tell us about your business.** A short interview: what they use today, what
+   the business does, whether it keeps stock, makes anything, sells from orders,
+   tracks batches or serial numbers, is tax registered. Follow-up questions
+   appear only when they are relevant, and "Not sure" is always allowed.
 2. **Company details**: name, country, currency, financial year and tax number.
 3. **One step per kind of data** (Users, Warehouses, Customers, Suppliers,
    Items and so on) — but only the steps and columns the answers call for. A
@@ -27,6 +27,11 @@ For each step the customer downloads a generated Excel template or uploads the
 file they already keep. Their headings are matched to ERPNext fields, every row
 is checked, and problems are explained in plain language and fixed on screen.
 
+**Already on Tally?** Say so in the interview and Embark points at Frappe's
+[Tally Migrator](https://github.com/frappe/tally_migrator) instead of asking for
+the same masters in a spreadsheet — it opens from the portal when the app is
+installed, and Embark shows how to install it when it isn't.
+
 ### Who can use it
 
 Embark has no roles of its own. It is used by the site's **System Managers**,
@@ -34,8 +39,11 @@ and everything it reads or writes goes through ERPNext's own permissions.
 
 A new site shows only ERPNext's setup wizard in the desk, so Embark works from
 its own portal: start the onboarding, fill it in, review the data, approve it
-or return it with a note, and download it in ERPNext's own shape. After setup
-the same record is available in the desk as well.
+or return it with a note, and download it in ERPNext's own shape.
+
+Once ERPNext's setup wizard has been run, Embark is a normal app in the desk
+too: a tile on the apps screen that opens the portal, and a sidebar with the
+onboarding, the uploads, the data steps and the interview questions.
 
 ### How the checks work
 
@@ -56,7 +64,7 @@ decide when each applies are all records you edit in the desk:
 
 | Record | Holds |
 |---|---|
-| Embark Data Area | A step: its target doctype, its columns, when it applies |
+| Embark Data Area | A step: its target doctype, its columns, its icon, when it applies |
 | Embark Question | An interview question, its choices and when it is asked |
 | Embark Onboarding | One customer: their answers, company details, progress |
 | Embark Upload | One uploaded file, its column matching and its check results |

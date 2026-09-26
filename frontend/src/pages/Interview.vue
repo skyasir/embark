@@ -27,6 +27,8 @@
 			</span>
 		</div>
 
+		<TallyHint />
+
 		<section v-for="group in groups" :key="group.name" class="space-y-5">
 			<h2 class="border-b border-outline-gray-1 pb-1 text-base font-semibold text-ink-gray-8">
 				{{ group.name }}
@@ -80,6 +82,7 @@ import { useRouter } from "vue-router"
 import { FormControl, LoadingIndicator, toast } from "frappe-ui"
 
 import Callout from "../components/Callout.vue"
+import TallyHint from "../components/TallyHint.vue"
 import { api, errorText } from "../data/api"
 import { setOverview, state } from "../data/store"
 

@@ -5,10 +5,10 @@
 		active-class="!bg-surface-selected font-medium !text-ink-gray-9 shadow-sm"
 		exact-active-class="!bg-surface-selected font-medium !text-ink-gray-9 shadow-sm"
 	>
-		<FeatherIcon v-if="icon" :name="icon" class="size-4 shrink-0" />
-		<span v-else class="mx-1 size-2 shrink-0 rounded-full" :class="dotClass" :title="dot" />
+		<FeatherIcon :name="icon || 'file-text'" class="size-4 shrink-0 text-ink-gray-6" />
 		<span class="flex-1 truncate">{{ label }}</span>
 		<span v-if="hint" class="text-sm text-ink-gray-4">{{ hint }}</span>
+		<span v-if="dot" class="size-1.5 shrink-0 rounded-full" :class="dotClass" :title="dot" />
 	</router-link>
 </template>
 
@@ -28,6 +28,7 @@ const dotClass = computed(
 	() =>
 		({
 			Ready: "bg-surface-green-3",
+			"In Progress": "bg-surface-amber-3",
 			"Needs Attention": "bg-surface-red-5",
 		})[props.dot] || "bg-surface-gray-4"
 )

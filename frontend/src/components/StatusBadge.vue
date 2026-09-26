@@ -14,6 +14,7 @@ const props = defineProps({
 
 const look = computed(() => {
 	if (props.status === "Ready") return { theme: "green", label: "Ready" }
+	if (props.status === "In Progress") return { theme: "orange", label: "In progress" }
 	if (props.status === "Needs Attention")
 		return {
 			theme: "red",

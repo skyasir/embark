@@ -70,6 +70,7 @@ TAX_ID = {
 AREAS = [
 	{
 		"area_name": "Users",
+		"icon": "users",
 		"required": 1,
 		"target_doctype": "User",
 		"key_field": "email",
@@ -115,6 +116,7 @@ AREAS = [
 	},
 	{
 		"area_name": "Item Groups",
+		"icon": "layers",
 		"required": 0,
 		"target_doctype": "Item Group",
 		"key_field": "item_group_name",
@@ -149,6 +151,7 @@ AREAS = [
 	},
 	{
 		"area_name": "Units of Measure",
+		"icon": "hash",
 		"required": 0,
 		"target_doctype": "UOM",
 		"key_field": "uom_name",
@@ -175,6 +178,7 @@ AREAS = [
 	},
 	{
 		"area_name": "Warehouses",
+		"icon": "archive",
 		"required": 1,
 		"applies_when": "keeps_stock == yes",
 		"target_doctype": "Warehouse",
@@ -208,6 +212,7 @@ AREAS = [
 	},
 	{
 		"area_name": "Customers",
+		"icon": "user-check",
 		"required": 1,
 		"target_doctype": "Customer",
 		"key_field": "customer_name",
@@ -264,6 +269,7 @@ AREAS = [
 	},
 	{
 		"area_name": "Suppliers",
+		"icon": "truck",
 		"required": 1,
 		"target_doctype": "Supplier",
 		"key_field": "supplier_name",
@@ -307,6 +313,7 @@ AREAS = [
 	},
 	{
 		"area_name": "Items",
+		"icon": "package",
 		"required": 1,
 		"target_doctype": "Item",
 		"key_field": "item_code",
@@ -396,6 +403,20 @@ CORE_AREAS = [
 # The interview. Answers decide which steps and columns a customer sees, and
 # later which ERPNext settings are switched on.
 QUESTIONS = [
+	{
+		"question_key": "current_system",
+		"label": "What do you use today?",
+		"section_title": "What you do",
+		"sequence": 5,
+		"answer_type": "One choice",
+		"choices": (
+			"tally | Tally\n"
+			"spreadsheets | Excel or Google Sheets\n"
+			"other_software | Another ERP or accounting package\n"
+			"paper | Books and invoices by hand"
+		),
+		"help_text": "Where your data lives now. If it is in Tally we can bring it across instead of asking you to type it again.",
+	},
 	{
 		"question_key": "business_type",
 		"label": "What does your business do?",
@@ -495,6 +516,24 @@ QUESTIONS = [
 ]
 
 
+# Embark's desk side: a tile on the apps screen and a sidebar for its records.
+# Both doctypes are v16-only, so a v15 site quietly skips them and reaches
+# Embark through the apps screen entry in hooks.py.
+DESK_SIDEBAR = "Embark"
+SIDEBAR_ITEMS = [
+	{"label": "Open Embark", "link_type": "URL", "url": "/embark", "icon": "rocket"},
+	{"label": "Onboarding", "link_type": "DocType", "link_to": "Embark Onboarding", "icon": "list-checks"},
+	{"label": "Uploads", "link_type": "DocType", "link_to": "Embark Upload", "icon": "upload"},
+	{"label": "Data Steps", "link_type": "DocType", "link_to": "Embark Data Area", "icon": "layers"},
+	{
+		"label": "Interview Questions",
+		"link_type": "DocType",
+		"link_to": "Embark Question",
+		"icon": "message-square",
+	},
+]
+
+
 def after_install():
 	seed()
 
@@ -512,19 +551,57 @@ def seed():
 		if not frappe.db.exists("Embark Data Area", area["area_name"]):
 			frappe.get_doc({"doctype": "Embark Data Area", **area}).insert(ignore_permissions=True)
 		else:
-			_fill_conditions(area)
+			_fill_blanks(area)
+
+	_seed_desk()
 
 
-def _fill_conditions(area: dict):
-	"""Areas seeded before the interview existed get their conditions once.
+def _seed_desk():
+	"""The tile on the desk's apps screen, and the sidebar behind it."""
+	if not frappe.db.exists("DocType", "Workspace Sidebar"):
+		return
 
-	Only empty conditions are filled, so a consultant's own edits stay.
+	if not frappe.db.exists("Workspace Sidebar", DESK_SIDEBAR):
+		frappe.get_doc(
+			{
+				"doctype": "Workspace Sidebar",
+				"title": DESK_SIDEBAR,
+				"module": "Embark",
+				"app": "embark",
+				"header_icon": "rocket",
+				"items": [{"type": "Link", **item} for item in SIDEBAR_ITEMS],
+			}
+		).insert(ignore_permissions=True)
+
+	# Frappe builds this tile itself from `add_to_apps_screen`; this is the
+	# fallback, and it keeps the same shape so both look the same.
+	if not frappe.db.exists("Desktop Icon", "Embark"):
+		frappe.get_doc(
+			{
+				"doctype": "Desktop Icon",
+				"label": "Embark",
+				"icon_type": "App",
+				"link_type": "External",
+				"link": "/embark",
+				"app": "embark",
+				"logo_url": "/assets/embark/embark-logo.svg",
+			}
+		).insert(ignore_permissions=True)
+
+
+def _fill_blanks(area: dict):
+	"""Areas seeded before a field existed get that field once.
+
+	Only blanks are filled, so a consultant's own edits stay.
 	"""
 	doc = frappe.get_doc("Embark Data Area", area["area_name"])
 	wanted = {f["fieldname"]: f.get("applies_when") for f in area["fields"]}
 	changed = False
 	if area.get("applies_when") and not doc.applies_when:
 		doc.applies_when = area["applies_when"]
+		changed = True
+	if area.get("icon") and not doc.icon:
+		doc.icon = area["icon"]
 		changed = True
 	for row in doc.fields:
 		if wanted.get(row.fieldname) and not row.applies_when:

@@ -11,7 +11,12 @@
 		<!-- 1. Upload -->
 		<section v-if="step === 0" class="space-y-6">
 			<div>
-				<h1 class="text-2xl font-semibold text-ink-gray-9">{{ data.area.name }}</h1>
+				<h1 class="flex items-center gap-2.5 text-2xl font-semibold text-ink-gray-9">
+					<span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-gray-2 text-ink-gray-7">
+						<FeatherIcon :name="data.area.icon || 'file-text'" class="size-4" />
+					</span>
+					{{ data.area.name }}
+				</h1>
 				<p class="mt-2 text-base leading-relaxed text-ink-gray-6">
 					{{ data.area.description }}
 					<template v-if="!data.area.required">This step is optional.</template>
@@ -182,9 +187,19 @@
 			</div>
 
 			<div>
-				<Button size="md" variant="ghost" :icon-right="showPreview ? 'chevron-up' : 'chevron-down'" @click="showPreview = !showPreview">
-					Preview what ERPNext will receive
-				</Button>
+				<button
+					class="flex w-full items-center justify-between gap-3 rounded-lg border border-outline-gray-2 px-4 py-3 text-left text-base text-ink-gray-8 transition-colors hover:bg-surface-gray-1"
+					@click="showPreview = !showPreview"
+				>
+					<span>
+						{{ showPreview ? "Hide" : "Show" }} what ERPNext will receive
+						<span class="text-ink-gray-5">
+							· {{ previewCount }} of {{ data.upload.rows }}
+							{{ data.upload.rows === 1 ? "row" : "rows" }}
+						</span>
+					</span>
+					<FeatherIcon :name="showPreview ? 'chevron-down' : 'chevron-right'" class="size-4 shrink-0 text-ink-gray-5" />
+				</button>
 				<div v-if="showPreview" class="mt-2 overflow-x-auto rounded-lg border border-outline-gray-2">
 					<table class="w-full text-left text-sm">
 						<thead class="bg-surface-gray-1 text-ink-gray-6">
@@ -243,6 +258,8 @@ const dragging = ref(false)
 const showColumns = ref(false)
 const showPreview = ref(false)
 const picker = ref(null)
+
+const previewCount = computed(() => data.value?.upload?.preview.rows.length || 0)
 
 const missingColumns = computed(() =>
 	(data.value?.upload?.groups || []).filter((g) => g.code === "COLUMN_MISSING").map((g) => g.label)

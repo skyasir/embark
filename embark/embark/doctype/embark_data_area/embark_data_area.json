@@ -11,6 +11,7 @@
   "applies_when",
   "required",
   "sequence",
+  "icon",
   "column_break_1",
   "description",
   "help_text",
@@ -47,6 +48,12 @@
    "fieldtype": "Int",
    "in_list_view": 1,
    "label": "Sequence"
+  },
+  {
+   "fieldname": "icon",
+   "fieldtype": "Data",
+   "label": "Portal Icon",
+   "description": "A Feather icon name (feathericons.com), shown beside this step in the portal."
   },
   {
    "fieldname": "column_break_1",
