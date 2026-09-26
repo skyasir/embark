@@ -887,23 +887,19 @@ SETUP_TASKS = [
 # Embark through the apps screen entry in hooks.py.
 DESK_SIDEBAR = "Embark"
 SIDEBAR_ITEMS = [
+	# Shaped like ERPNext's own sidebars: the everyday links first, then the
+	# records grouped under section headings.
 	{"label": "Open Embark", "link_type": "URL", "url": "/embark", "icon": "rocket"},
 	{"label": "Onboarding", "link_type": "DocType", "link_to": "Embark Onboarding", "icon": "list-checks"},
-	{"label": "Uploads", "link_type": "DocType", "link_to": "Embark Upload", "icon": "upload"},
-	{"label": "Data Steps", "link_type": "DocType", "link_to": "Embark Data Area", "icon": "layers"},
-	{
-		"label": "Interview Questions",
-		"link_type": "DocType",
-		"link_to": "Embark Question",
-		"icon": "message-square",
-	},
 	{"label": "Studio", "link_type": "Page", "link_to": "embark-studio", "icon": "code"},
-	{
-		"label": "Change Sets",
-		"link_type": "DocType",
-		"link_to": "Embark Change Set",
-		"icon": "history",
-	},
+	{"type": "Section Break", "label": "Data", "icon": "database", "indent": 1},
+	{"label": "Uploads", "link_type": "DocType", "link_to": "Embark Upload", "child": 1},
+	{"label": "Data Steps", "link_type": "DocType", "link_to": "Embark Data Area", "child": 1},
+	{"label": "Interview Questions", "link_type": "DocType", "link_to": "Embark Question", "child": 1},
+	{"label": "Setup Plan", "link_type": "DocType", "link_to": "Embark Setup Task", "child": 1},
+	{"type": "Section Break", "label": "Studio", "icon": "settings", "indent": 1},
+	{"label": "Change Sets", "link_type": "DocType", "link_to": "Embark Change Set", "child": 1},
+	{"label": "Settings", "link_type": "DocType", "link_to": "Embark Settings", "child": 1},
 ]
 
 
@@ -938,6 +934,7 @@ def _seed_desk():
 	if not frappe.db.exists("DocType", "Workspace Sidebar"):
 		return
 
+	wanted = [{"type": "Link", **item} for item in SIDEBAR_ITEMS]
 	if not frappe.db.exists("Workspace Sidebar", DESK_SIDEBAR):
 		frappe.get_doc(
 			{
@@ -946,9 +943,16 @@ def _seed_desk():
 				"module": "Embark",
 				"app": "embark",
 				"header_icon": "rocket",
-				"items": [{"type": "Link", **item} for item in SIDEBAR_ITEMS],
+				"items": wanted,
 			}
 		).insert(ignore_permissions=True)
+	else:
+		# Embark's own sidebar follows the app, so a new page or record appears
+		# in it. A consultant's own sidebar is a different record and is left be.
+		doc = frappe.get_doc("Workspace Sidebar", DESK_SIDEBAR)
+		if [row.label for row in doc.items] != [item["label"] for item in wanted]:
+			doc.set("items", wanted)
+			doc.save(ignore_permissions=True)
 
 	# Frappe builds this tile itself from `add_to_apps_screen`; this is the
 	# fallback, and it keeps the same shape so both look the same.
