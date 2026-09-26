@@ -126,6 +126,13 @@ class TestCopilot(FrappeTestCase):
 		# And it stays off unless the site asks for it.
 		self.assertFalse(copilot_flow.available())
 
+	def test_a_property_change_has_to_say_what_and_to_what(self):
+		"""A model will call this with half the arguments missing."""
+		self.assertRaises(frappe.ValidationError, copilot.set_property, "Item", "item_name", None, "x")
+		self.assertRaises(frappe.ValidationError, copilot.set_property, "Item", "item_name", "colour", "red")
+		self.assertRaises(frappe.ValidationError, copilot.set_property, "Item", "item_name", "label", None)
+		self.assertRaises(frappe.ValidationError, copilot.set_property, "Item", "item_name", "label", "")
+
 	def test_it_refuses_what_it_should_not_touch(self):
 		# Business data is out of reach, whatever the model asks for.
 		self.assertRaises(

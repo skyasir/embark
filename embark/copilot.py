@@ -97,8 +97,34 @@ def add_field(
 	}
 
 
+# What may be changed about a field. Anything else is either meaningless here
+# or a way to break a form.
+PROPERTIES = (
+	"label",
+	"reqd",
+	"hidden",
+	"read_only",
+	"default",
+	"description",
+	"options",
+	"in_list_view",
+	"in_standard_filter",
+	"bold",
+	"precision",
+	"depends_on",
+)
+
+
 def set_property(doctype: str, fieldname: str, prop: str, value, property_type: str = "Data") -> dict:
 	"""Change one thing about an existing field: its label, whether it is required, hidden."""
+	if prop not in PROPERTIES:
+		frappe.throw(
+			_("{0} is not something this changes. It changes: {1}.").format(
+				prop or _("nothing"), ", ".join(PROPERTIES)
+			)
+		)
+	if value is None or value == "":
+		frappe.throw(_("Changing {0} needs a value to change it to.").format(prop))
 	meta = frappe.get_meta(doctype)
 	if fieldname:
 		fieldname = _resolve(meta, fieldname)
