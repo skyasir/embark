@@ -12,9 +12,7 @@
 				</div>
 				<div class="min-w-0">
 					<div class="truncate text-base font-medium text-ink-gray-9">{{ overview.client_name }}</div>
-					<div class="truncate text-sm text-ink-gray-5">
-						{{ overview.package.name }} · {{ hours(overview.package.hours) }}
-					</div>
+					<div class="truncate text-sm text-ink-gray-5">{{ overview.readiness }}% ready</div>
 				</div>
 			</div>
 
@@ -116,10 +114,6 @@ const title = computed(() => {
 watchEffect(() => {
 	document.title = route.name === "home" ? "Embark" : `${title.value} · Embark`
 })
-
-function hours(n) {
-	return `${Number(n)} ${Number(n) === 1 ? "hour" : "hours"}`
-}
 
 async function logout() {
 	try {

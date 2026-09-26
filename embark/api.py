@@ -48,22 +48,15 @@ PREVIEW_ROWS = 20
 
 @frappe.whitelist()
 def get_overview(onboarding: str | None = None) -> dict:
-	if not onboarding and is_staff() and not frappe.db.count("Embark Onboarding"):
+	if not onboarding and not frappe.db.count("Embark Onboarding"):
 		# A freshly created customer site: the consultant starts here.
 		return {
 			"needs_start": True,
-			"is_staff": True,
-			"packages": frappe.get_all(
-				"Embark Package",
-				filters={"is_active": 1},
-				fields=["name", "modules", "hours"],
-				order_by="name asc",
-			),
+			"is_staff": is_staff(),
 			"user": {"name": frappe.session.user, "full_name": get_fullname(frappe.session.user)},
 			"can_use_desk": True,
 		}
 	doc = _get_onboarding(onboarding)
-	package = frappe.get_cached_doc("Embark Package", doc.package)
 	areas = {
 		a.name: a
 		for a in frappe.get_all(
@@ -97,23 +90,11 @@ def get_overview(onboarding: str | None = None) -> dict:
 		"target_go_live": doc.target_go_live,
 		"locked": _locked(doc),
 		"is_staff": is_staff(),
-		"package": {
-			"name": package.name,
-			"modules": package.modules,
-			"hours": package.hours,
-			"description": package.description,
-		},
 		"interview": doc.interview(),
 		"company": {f: doc.get(f) for f in COMPANY_FIELDS},
 		"company_complete": doc.company_complete(),
 		"steps": steps,
 		"can_submit": doc.readiness == 100 and doc.status not in LOCKED_STATUSES,
-		"portal_user": doc.portal_user if is_staff() else None,
-		"portal_user_has_desk": bool(
-			is_staff()
-			and doc.portal_user
-			and frappe.db.get_value("User", doc.portal_user, "user_type") == "System User"
-		),
 		"can_use_desk": _can_use_desk(),
 		"has_data": any(row.rows for row in doc.areas),
 		"user": {"name": frappe.session.user, "full_name": get_fullname(frappe.session.user)},
@@ -414,99 +395,19 @@ def _notify_consultant(doc):
 
 
 @frappe.whitelist(methods=["POST"])
-def start_onboarding(
-	client_name: str,
-	package: str,
-	email: str,
-	first_name: str,
-	last_name: str | None = None,
-	send_email: int = 1,
-	desk_access: int = 0,
-) -> dict:
-	"""Set this customer site up for Embark: the onboarding for their package, and their login."""
+def start_onboarding(client_name: str) -> dict:
+	"""Set this site up for Embark. One site, one onboarding."""
 	_require_staff()
 	if frappe.db.count("Embark Onboarding"):
 		frappe.throw(_("This site already has an onboarding. Each customer site has one."))
-	if not frappe.db.get_value("Embark Package", package, "is_active"):
-		frappe.throw(_("Choose one of the active packages."))
 	doc = frappe.get_doc(
 		{
 			"doctype": "Embark Onboarding",
 			"client_name": cstr(client_name).strip(),
-			"package": package,
 			"consultant": frappe.session.user,
 		}
 	).insert()
-	invite = invite_customer(doc.name, email, first_name, last_name, send_email, desk_access)
-	return {"overview": get_overview(doc.name), "invite": invite}
-
-
-@frappe.whitelist(methods=["POST"])
-def invite_customer(
-	onboarding: str,
-	email: str,
-	first_name: str,
-	last_name: str | None = None,
-	send_email: int = 1,
-	desk_access: int = 0,
-) -> dict:
-	"""Create (or reuse) the customer's login and link it to the onboarding.
-
-	``desk_access`` 0: portal only. 1: the package's desk roles too, with Embark
-	as the app they land in, so they can switch to the desk when they want.
-	"""
-	_require_staff()
-	doc = _get_onboarding(onboarding, "write")
-	email = cstr(email).strip().lower()
-	validate_email_address(email, throw=True)
-	if frappe.db.exists("User", email) and is_staff(email):
-		frappe.throw(_("{0} is a consultant login. Invite the customer with their own email.").format(email))
-
-	if frappe.db.exists("User", email):
-		user = frappe.get_doc("User", email)
-	else:
-		# Consultants may not hold User permissions. This endpoint can only create
-		# a Website User carrying the single portal role, so bypassing them is safe.
-		user = frappe.get_doc(
-			{
-				"doctype": "User",
-				"email": email,
-				"first_name": first_name,
-				"last_name": last_name,
-				"user_type": "Website User",
-				"send_welcome_email": 0,
-			}
-		).insert(ignore_permissions=True)
-	_set_access(user, doc.package, int(desk_access))
-
-	doc.portal_user = email
-	doc.save()
-
-	if int(send_email):
-		user.send_welcome_mail_to_user()
-		return {"user": email, "emailed": True}
-	# v15 calls it reset_password, v16 renamed it _reset_password.
-	make_link = getattr(user, "_reset_password", None) or user.reset_password
-	return {"user": email, "emailed": False, "setup_link": make_link(send_email=False)}
-
-
-def _set_access(user, package: str, desk_access: int):
-	"""Portal only, or portal plus the package's desk roles. Never System Manager."""
-	desk_roles = {row.role for row in frappe.get_cached_doc("Embark Package", package).desk_roles}
-	keep = [r for r in user.roles if desk_access or r.role not in desk_roles]
-	have = {r.role for r in keep}
-	user.set("roles", keep)
-	for role in ({"Embark Customer"} | (desk_roles if desk_access else set())) - have:
-		user.append("roles", {"role": role})
-	user.user_type = "System User" if desk_access else "Website User"
-	if user.meta.has_field("default_app"):  # v15.x+: the app a desk user lands in
-		user.default_app = (
-			"embark" if desk_access else (None if user.default_app == "embark" else user.default_app)
-		)
-	# Consultants may not hold User permissions; this only ever grants the portal
-	# role and the package's own desk roles, never System Manager.
-	user.flags.ignore_permissions = True
-	user.save()
+	return {"overview": get_overview(doc.name)}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -535,14 +436,9 @@ def download_prepared_data(onboarding: str):
 
 def _get_onboarding(onboarding: str | None = None, ptype: str = "read"):
 	if not onboarding:
-		# The customer's own onboarding; for a consultant, the site's onboarding.
-		filters = {} if is_staff() else {"portal_user": frappe.session.user}
-		onboarding = frappe.db.get_value("Embark Onboarding", filters, "name", order_by="creation desc")
+		onboarding = frappe.db.get_value("Embark Onboarding", {}, "name", order_by="creation desc")
 		if not onboarding:
-			frappe.throw(
-				_("No onboarding is linked to your login yet. Please contact your consultant."),
-				frappe.DoesNotExistError,
-			)
+			frappe.throw(_("This site has no onboarding yet."), frappe.DoesNotExistError)
 	doc = frappe.get_doc("Embark Onboarding", onboarding)
 	doc.check_permission(ptype)
 	return doc
@@ -563,14 +459,13 @@ def _upload_name(onboarding: str, area: str) -> str | None:
 
 def _ensure_area(doc, area: str):
 	if area not in {row.data_area for row in doc.areas}:
-		frappe.throw(_("{0} is not part of your package.").format(area), frappe.DoesNotExistError)
+		frappe.throw(_("{0} is not one of your steps.").format(area), frappe.DoesNotExistError)
 
 
 def _can_use_desk() -> bool:
 	"""A desk login, and a desk that will let them in.
 
-	Until ERPNext's setup wizard has run, the desk admits only System Managers,
-	so the customer's "Switch to Desk" appears once the consultant completes it.
+	Until ERPNext's setup wizard has run, the desk admits only System Managers.
 	"""
 	if frappe.db.get_value("User", frappe.session.user, "user_type") != "System User":
 		return False
@@ -585,7 +480,8 @@ def _can_use_desk() -> bool:
 
 
 def _locked(doc) -> bool:
-	return doc.status in LOCKED_STATUSES and not is_staff()
+	"""Data is read-only once it has been sent for review, until it is returned."""
+	return doc.status in LOCKED_STATUSES
 
 
 def _require_staff():

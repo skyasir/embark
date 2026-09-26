@@ -6,8 +6,6 @@ export const state = reactive({
 	overview: null,
 	loading: true,
 	error: null,
-	// The last login link a consultant created, shown until the page is left.
-	invite: null,
 })
 
 const KEY = "embark-onboarding-id"
