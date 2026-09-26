@@ -357,7 +357,13 @@ class TestOnboardingFlow(TestCase):
 		written = '{"name": "save_answers", "parameters": {"answers": {"keeps_stock": "no"}}}'
 		self.assertEqual(
 			llm.recovered_calls(written),
-			[{"id": "recovered-save_answers", "name": "save_answers", "arguments": {"answers": {"keeps_stock": "no"}}}],
+			[
+				{
+					"id": "recovered-save_answers",
+					"name": "save_answers",
+					"arguments": {"answers": {"keeps_stock": "no"}},
+				}
+			],
 		)
 		# Fenced, and with a sentence around it, is the same call.
 		self.assertTrue(llm.recovered_calls(f"Sure:\n```json\n{written}\n```"))
@@ -371,7 +377,12 @@ class TestOnboardingFlow(TestCase):
 
 		frappe.db.set_single_value(
 			"Embark Settings",
-			{"assistant_enabled": 1, "provider": "OpenAI compatible", "model": "stub", "base_url": "http://stub.invalid/v1"},
+			{
+				"assistant_enabled": 1,
+				"provider": "OpenAI compatible",
+				"model": "stub",
+				"base_url": "http://stub.invalid/v1",
+			},
 		)
 		frappe.clear_cache(doctype="Embark Settings")
 
