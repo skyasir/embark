@@ -19,6 +19,7 @@ import frappe
 import requests
 from frappe import _
 
+from embark import copilot
 from embark.llm import looks_like_plumbing, recovered_calls
 
 # A long conversation with a small model is still cheap; a runaway loop is not.
@@ -70,6 +71,22 @@ TOOLS = [
 ]
 
 
+def studio_tools() -> list[dict]:
+	"""The change-making tools, for whoever implements this site.
+
+	The customer's chat fills in their interview. The implementer's chat also
+	reaches Studio: the same builders, the same change set, proposed and applied
+	from here rather than from a second screen.
+	"""
+	from embark.copilot_chat import TOOLS as STUDIO_TOOLS
+
+	try:
+		copilot._studio_user()
+	except frappe.PermissionError:
+		return []
+	return STUDIO_TOOLS
+
+
 def settings():
 	return frappe.get_cached_doc("Embark Settings")
 
@@ -99,25 +116,25 @@ def ask(onboarding: str, message: str, history: list[dict] | None = None) -> dic
 	]
 	messages.append({"role": "user", "content": message})
 
-	used = []
+	used: list[str] = []
+	steps: list[dict] = []
+	pending: list[dict] = []
+	extra = studio_tools()
 	for _round in range(MAX_ROUNDS):
-		reply = _complete(messages)
+		reply = _complete(messages, extra)
 		calls = reply["tool_calls"] or recovered_calls(reply["text"])
 		if not calls:
 			text = reply["text"]
 			if looks_like_plumbing(text):
 				# Never show the machinery: say something true instead.
 				text = _("Sorry, I did not follow that. Could you say it another way?")
-			return {
-				"reply": text or _("Sorry, I did not follow that. Could you say it another way?"),
-				"used": used,
-				"overview": api.get_overview(onboarding),
-			}
+			return _answer(onboarding, text, used, steps, pending, message)
 
 		messages.append(reply["raw"])
 		for call in calls:
-			result = _run_tool(onboarding, call["name"], call["arguments"])
+			result = _run_tool(onboarding, call["name"], call["arguments"], pending)
 			used.append(call["name"])
+			steps.append(_step(call, result))
 			messages.append(
 				{
 					"role": "tool",
@@ -127,14 +144,38 @@ def ask(onboarding: str, message: str, history: list[dict] | None = None) -> dic
 				}
 			)
 
+	return _answer(
+		onboarding,
+		_("That took longer than it should have. Could you try again, more simply?"),
+		used,
+		steps,
+		pending,
+		message,
+	)
+
+
+def _answer(onboarding, text, used, steps, pending, request) -> dict:
+	"""What the chat sends back: words, what it did, and any change to apply."""
+	from embark import api
+	from embark.copilot_chat import _title
+
+	change_set = copilot.propose(_title(request), request, pending) if pending else None
 	return {
-		"reply": _("That took longer than it should have. Could you try again, more simply?"),
+		"reply": text or _("Sorry, I did not follow that. Could you say it another way?"),
 		"used": used,
+		"steps": steps,
+		"change_set": change_set,
 		"overview": api.get_overview(onboarding),
 	}
 
 
-def _run_tool(onboarding: str, name: str, arguments: dict) -> dict:
+def _step(call: dict, result: dict) -> dict:
+	from embark.copilot_chat import _step as studio_step
+
+	return studio_step(call, result)
+
+
+def _run_tool(onboarding: str, name: str, arguments: dict, pending: list[dict] | None = None) -> dict:
 	"""Every tool goes through Embark's own API, so its rules still apply."""
 	from embark import api
 
@@ -174,23 +215,31 @@ def _run_tool(onboarding: str, name: str, arguments: dict) -> dict:
 			],
 		}
 
+	# Anything else is Studio's: the builders that compose a change set.
+	if pending is not None and any(tool["name"] == name for tool in studio_tools()):
+		from embark.copilot_chat import _run_tool as studio_run
+
+		result, _change_set = studio_run(name, arguments, pending, "")
+		return result
+
 	return {"error": f"No such tool: {name}"}
 
 
-def _complete(messages: list[dict]) -> dict:
+def _complete(messages: list[dict], extra_tools: list[dict] | None = None) -> dict:
 	"""One call to the provider, normalised to {text, tool_calls, raw}."""
 	doc = settings()
 	key = doc.get_password("api_key", raise_exception=False) or ""
+	tools = [*TOOLS, *(extra_tools or [])]
 	if doc.provider == "Anthropic":
-		return _anthropic(doc, key, messages)
-	return _openai(doc, key, messages)
+		return _anthropic(doc, key, messages, tools)
+	return _openai(doc, key, messages, tools)
 
 
-def _openai(doc, key: str, messages: list[dict]) -> dict:
+def _openai(doc, key: str, messages: list[dict], tools: list[dict]) -> dict:
 	body = {
 		"model": doc.model,
 		"messages": [{"role": "system", "content": SYSTEM_PROMPT}, *messages],
-		"tools": [{"type": "function", "function": t} for t in TOOLS],
+		"tools": [{"type": "function", "function": t} for t in tools],
 		"temperature": 0,
 	}
 	data = _post(f"{doc.base_url.rstrip('/')}/chat/completions", body, {"Authorization": f"Bearer {key}"})
@@ -209,7 +258,7 @@ def _openai(doc, key: str, messages: list[dict]) -> dict:
 	}
 
 
-def _anthropic(doc, key: str, messages: list[dict]) -> dict:
+def _anthropic(doc, key: str, messages: list[dict], tools: list[dict]) -> dict:
 	body = {
 		"model": doc.model,
 		"max_tokens": 1024,
@@ -217,7 +266,7 @@ def _anthropic(doc, key: str, messages: list[dict]) -> dict:
 		"messages": _to_anthropic(messages),
 		"tools": [
 			{"name": t["name"], "description": t["description"], "input_schema": t["parameters"]}
-			for t in TOOLS
+			for t in tools
 		],
 	}
 	url = f"{(doc.base_url or 'https://api.anthropic.com').rstrip('/')}/v1/messages"

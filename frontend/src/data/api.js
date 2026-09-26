@@ -6,6 +6,11 @@ export function api(method, args = {}) {
 	return call(METHOD + method, args)
 }
 
+/** A whitelisted method outside embark.api, called by its full path. */
+export function callMethod(method, args = {}) {
+	return call(method, args)
+}
+
 /** The message Frappe meant for a person, without the traceback. */
 export function errorText(error) {
 	const messages = (error?.messages || []).filter(Boolean)
