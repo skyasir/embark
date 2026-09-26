@@ -3,7 +3,7 @@
 Embark runs on the customer's own site, one onboarding per site. The site is
 handed over before ERPNext's setup wizard has run, and until then the desk only
 shows the wizard, so everything the consultant needs before setup (start,
-invite, review) is also available from the portal.
+review, download) is also available from the portal.
 
 Every call loads the onboarding through ``_get_onboarding``, which applies the
 normal permission check (and so the row-level hooks in permissions.py). A
@@ -112,6 +112,44 @@ def get_overview(onboarding: str | None = None) -> dict:
 		"assistant": assistant.is_on(),
 		"user": {"name": frappe.session.user, "full_name": get_fullname(frappe.session.user)},
 	}
+
+
+@frappe.whitelist()
+def ai_settings() -> dict:
+	"""What the chat is pointed at. The key itself never comes back."""
+	_require_staff()
+	doc = frappe.get_single("Embark Settings")
+	return {
+		"enabled": bool(doc.assistant_enabled),
+		"provider": doc.provider or "OpenAI compatible",
+		"base_url": doc.base_url or "",
+		"model": doc.model or "",
+		"has_key": bool(doc.get_password("api_key", raise_exception=False)),
+		"on": assistant.is_on(),
+	}
+
+
+@frappe.whitelist()
+def save_ai_settings(
+	enabled: int | bool = 0,
+	provider: str = "OpenAI compatible",
+	base_url: str = "",
+	model: str = "",
+	api_key: str | None = None,
+) -> dict:
+	"""Point the chat at a provider, from the portal: the desk may not be open yet."""
+	_require_staff()
+	doc = frappe.get_single("Embark Settings")
+	doc.assistant_enabled = 1 if frappe.parse_json(enabled) else 0
+	doc.provider = provider
+	doc.base_url = base_url.strip()
+	doc.model = model.strip()
+	# An empty key means "leave the one you have".
+	if api_key:
+		doc.api_key = api_key
+	doc.save(ignore_permissions=True)
+	frappe.clear_cache(doctype="Embark Settings")
+	return ai_settings()
 
 
 @frappe.whitelist()

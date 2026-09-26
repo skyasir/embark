@@ -6,6 +6,7 @@ export const state = reactive({
 	overview: null,
 	loading: true,
 	error: null,
+	chatOpen: false,
 })
 
 const KEY = "embark-onboarding-id"

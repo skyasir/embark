@@ -1,24 +1,14 @@
 <template>
-	<div v-if="o?.assistant">
-		<Button
-			v-if="!open"
-			class="fixed bottom-5 right-5 shadow-lg"
-			variant="solid"
-			size="md"
-			icon-left="message-circle"
-			@click="open = true"
-		>
-			Ask Embark
-		</Button>
-
+	<div v-if="o?.assistant && state.chatOpen" class="contents">
+		<!-- A column beside the sidebar, not a floating box: the checklist stays
+		     visible while the customer talks. -->
 		<aside
-			v-else
-			class="fixed bottom-0 right-0 top-0 z-10 flex w-full flex-col border-l border-outline-gray-2 bg-surface-white shadow-xl sm:w-[380px]"
+			class="fixed inset-0 z-10 flex flex-col border-r border-outline-gray-1 bg-surface-white sm:static sm:z-0 sm:w-[360px] sm:shrink-0"
 		>
 			<header class="flex h-12 shrink-0 items-center gap-2 border-b border-outline-gray-1 px-4">
 				<FeatherIcon name="message-circle" class="size-4 text-ink-gray-6" />
 				<span class="flex-1 text-base font-medium text-ink-gray-9">Ask Embark</span>
-				<Button variant="ghost" icon="x" label="Close" @click="open = false" />
+				<Button variant="ghost" icon="x" label="Close" @click="state.chatOpen = false" />
 			</header>
 
 			<div ref="scroller" class="flex-1 space-y-3 overflow-y-auto px-4 py-4">
@@ -79,7 +69,6 @@ const EXAMPLES = [
 ]
 
 const o = computed(() => state.overview)
-const open = ref(false)
 const draft = ref("")
 const busy = ref(false)
 const messages = ref([])
