@@ -58,7 +58,11 @@ TOOLS = [
 				"label": {"type": "string", "description": "The label on the form, for example: PO Number"},
 				"fieldtype": {
 					"type": "string",
-					"description": "Data, Int, Currency, Date, Check, Select, Link, Text…",
+					"description": (
+						"Data for a name or code, Int or Currency for numbers, Date, Check for yes/no, "
+						"Select for a fixed list, Link to another record, Text only when several lines "
+						"are wanted. Default to Data."
+					),
 				},
 				"options": {
 					"type": "string",
