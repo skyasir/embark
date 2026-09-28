@@ -446,6 +446,11 @@ def check(
 				raw = None
 			value, code, detail = coerce(c, raw)
 			out[c.fieldname] = value
+			# A column that is missing altogether is one problem, not one per
+			# row: a customer with 3,000 items should read "we couldn't find
+			# your unit column", not 3,000 missing values.
+			if code == "REQUIRED_MISSING" and c.fieldname not in source and not fixes.get(c.fieldname):
+				continue
 			if code:
 				issues.append(_issue(code, c, sheet_row, _display(raw), *_message(code, c, raw, detail)))
 		clean_rows.append(out)

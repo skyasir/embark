@@ -155,6 +155,24 @@ class TestCopilot(FrappeTestCase):
 		finally:
 			frappe.set_user("Administrator")
 
+	def test_a_report_reads_business_tables_and_nothing_else(self):
+		"""The query runs with the database's own reach, so it is worth pinning."""
+		ok = "select name, customer_name from `tabCustomer` where disabled = 0"
+		self.assertEqual(copilot.create_report("Customers", "Customer", ok)["ref_doctype"], "Report")
+
+		for bad in (
+			"delete from `tabCustomer`",
+			"select * from `tabCustomer`; drop table `tabItem`",
+			"select * from __Auth",
+			"select * from information_schema.tables",
+			"select load_file('/etc/passwd')",
+			"select name into outfile '/tmp/x' from `tabCustomer`",
+			"select @@version",
+			"select name, api_key from `tabUser`",
+		):
+			with self.assertRaises(frappe.ValidationError, msg=bad):
+				copilot.create_report("Bad", "Customer", bad)
+
 	def test_it_refuses_what_it_should_not_touch(self):
 		# Business data is out of reach, whatever the model asks for.
 		self.assertRaises(
