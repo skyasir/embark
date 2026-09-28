@@ -45,6 +45,23 @@ Once ERPNext's setup wizard has been run, Embark is a normal app in the desk
 too: a tile on the apps screen that opens the portal, and a sidebar with the
 onboarding, the uploads, the data steps and the interview questions.
 
+### The chat
+
+Embark has one chat box. What it can do depends on who is asking: a customer's
+chat fills in their interview, and a chat belonging to whoever holds the
+**Embark Studio** role also changes the site — as a change set they apply and
+can undo, never directly.
+
+Point it at a provider under **Configure AI** in the portal. Anything serving
+`/chat/completions` works (OpenAI, Ollama, vLLM, a Flow gateway), and Anthropic
+is spoken natively. With nothing configured there is no chat at all.
+
+**The model matters more than anything else here.** A small local model
+(llama3.2:3b) mangles its own tool calls, invents question keys and picks the
+wrong field types; Embark repairs what it can, and it still reads badly.
+qwen2.5:7b is the smallest local model that behaves. A hosted model — GPT or
+Claude — is better again, and costs a few paise per onboarding.
+
 ### How the checks work
 
 Each data step points at a real ERPNext doctype, and the rules come from that
