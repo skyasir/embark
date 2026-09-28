@@ -7,7 +7,8 @@
  "field_order": [
   "question",
   "label",
-  "answer"
+  "answer",
+  "note"
  ],
  "fields": [
   {
@@ -34,6 +35,12 @@
    "fieldtype": "Small Text",
    "in_list_view": 1,
    "label": "Answer"
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "label": "In Their Words",
+   "description": "What the customer typed, when they answered in their own words rather than picking."
   }
  ],
  "index_web_pages_for_search": 0,

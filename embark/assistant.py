@@ -87,6 +87,61 @@ def studio_tools() -> list[dict]:
 	return STUDIO_TOOLS
 
 
+def read_answer(question, text: str) -> dict:
+	"""Read a written answer into one of a question's choices.
+
+	No tools, no conversation: one small judgement, returned as JSON. With no
+	provider configured it returns nothing, and the words are kept as they are
+	for the consultant to read.
+	"""
+	from embark.api import _choices
+
+	choices = _choices(question) or [{"value": "yes", "label": "Yes"}, {"value": "no", "label": "No"}]
+	allowed = [c["value"] for c in choices]
+	if question.allow_not_sure:
+		allowed.append("not_sure")
+	if not is_on():
+		return {}
+
+	listed = "\n".join(f"- {c['value']}: {c['label']}" for c in choices)
+	prompt = (
+		f'Question: "{question.label}"\n'
+		f"Choices:\n{listed}\n\n"
+		f'The customer wrote: "{text}"\n\n'
+		"Which choice does that mean? Answer with JSON only, no other words: "
+		'{"value": "<one of ' + ", ".join(allowed) + '>", "why": "<six words or fewer>"}. '
+		"If it truly does not say, use an empty value."
+	)
+	try:
+		reply = _complete([{"role": "user", "content": prompt}])
+	except Exception:
+		return {}
+
+	data = _json_object(reply.get("text") or "")
+	value = (data.get("value") or "").strip()
+	# Several choices are allowed to come back comma separated.
+	values = [v.strip() for v in value.split(",") if v.strip() in allowed]
+	if not values:
+		return {}
+	if question.answer_type != "Several choices":
+		values = values[:1]
+	return {"value": ",".join(values), "why": (data.get("why") or "").strip()[:80]}
+
+
+def _json_object(text: str) -> dict:
+	"""The JSON in a reply, whatever it is wrapped in."""
+	import re
+
+	for candidate in (text, *re.findall(r"\{.*?\}", text or "", re.S)):
+		try:
+			data = json.loads(candidate)
+		except ValueError:
+			continue
+		if isinstance(data, dict):
+			return data
+	return {}
+
+
 def settings():
 	return frappe.get_cached_doc("Embark Settings")
 

@@ -71,6 +71,53 @@
 					<span class="flex-1">{{ choice.label }}</span>
 				</button>
 
+				<!-- "Not sure" opens a place to say it instead of closing the question. -->
+				<div v-if="openText" class="pt-2">
+					<p class="mb-2 text-base text-ink-gray-6">
+						Tell us in your own words and we'll work out what it means — or skip it and your
+						consultant will ask.
+					</p>
+					<div
+						class="rounded-lg border px-3 py-2 transition-colors"
+						:class="writing ? 'border-outline-gray-3' : 'border-outline-gray-2'"
+					>
+						<div class="flex items-end gap-2">
+							<textarea
+								v-model="words"
+								rows="1"
+								class="fvs-words block max-h-28 flex-1 resize-none border-0 bg-transparent p-0 text-base leading-relaxed text-ink-gray-8 placeholder:text-ink-gray-4 focus:outline-none focus:ring-0"
+							placeholder="For example: we keep some stock but order most of it in…"
+								:disabled="data.locked || busy"
+								@focus="writing = true"
+								@blur="writing = false"
+								@keydown.enter.exact.prevent="sendWords()"
+							/>
+							<button
+								class="flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-gray-3 text-ink-gray-8 transition-colors hover:bg-surface-gray-4 disabled:opacity-40"
+								:disabled="busy || !words.trim()"
+								aria-label="Send"
+								@click="sendWords()"
+							>
+								<FeatherIcon name="arrow-up" class="size-4" />
+							</button>
+						</div>
+					</div>
+					<div class="mt-2">
+						<Button variant="ghost" size="sm" :loading="busy" @click="answer(current, 'not_sure', true)">
+							Skip this one
+						</Button>
+					</div>
+					<p v-if="reading" class="mt-2 text-sm" :class="reading.understood ? 'text-ink-green-3' : 'text-ink-amber-3'">
+						<template v-if="reading.understood">
+							Recorded as <strong>{{ reading.read_as }}</strong>
+							<template v-if="reading.why"> — {{ reading.why }}</template>. Pick above if that's wrong.
+						</template>
+						<template v-else>
+							Kept in your words for your consultant to read.
+						</template>
+					</p>
+				</div>
+
 				<!-- Several choices stay open until you say you are done. -->
 				<div v-if="current.type === 'Several choices'" class="pt-2">
 					<Button
@@ -93,41 +140,56 @@
 			</div>
 		</section>
 
-		<!-- Everything answered: what you said, and where to go next. -->
-		<section v-else class="space-y-6">
+		<!-- Everything answered: what it comes to, not a replay of the form. -->
+		<section v-else class="space-y-8">
 			<div>
-				<h1 class="text-2xl font-semibold text-ink-gray-9">That's everything we need to ask</h1>
+				<h1 class="text-2xl font-semibold text-ink-gray-9">
+					That's everything — here's what it means for {{ o?.client_name }}
+				</h1>
 				<p class="mt-2 text-base leading-relaxed text-ink-gray-6">
-					Your answers decide what we set up and what we ask you for. Change any of them and the
-					checklist follows.
+					Worked out from your answers. Change any answer and this follows.
 				</p>
 			</div>
 
-			<ul class="divide-y divide-outline-gray-1 overflow-hidden rounded-lg border border-outline-gray-2">
+			<div class="grid gap-3 sm:grid-cols-3">
+				<div v-for="card in cards" :key="card.label" class="rounded-lg border border-outline-gray-2 p-4">
+					<div class="text-3xl font-semibold tabular-nums text-ink-gray-9">{{ card.count }}</div>
+					<div class="mt-0.5 text-base text-ink-gray-7">{{ card.label }}</div>
+					<div class="mt-2 text-sm leading-relaxed text-ink-gray-5">{{ card.examples }}</div>
+				</div>
+			</div>
+
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<Button variant="ghost" size="md" @click="showAnswers = !showAnswers">
+					{{ showAnswers ? "Hide your answers" : `Review your answers (${total})` }}
+				</Button>
+				<Button variant="solid" size="md" icon-right="arrow-right" @click="router.push({ name: 'company' })">
+					Next: company details
+				</Button>
+			</div>
+
+			<ul
+				v-if="showAnswers"
+				class="divide-y divide-outline-gray-1 overflow-hidden rounded-lg border border-outline-gray-2"
+			>
 				<li
 					v-for="(q, i) in data.questions"
 					:key="q.key"
 					class="flex items-center gap-3 px-4 py-3 hover:bg-surface-gray-1"
 				>
 					<span class="min-w-0 flex-1">
-						<span class="block text-base text-ink-gray-7">{{ q.label }}</span>
+						<span class="block text-base text-ink-gray-6">{{ q.label }}</span>
 						<span class="block truncate text-base font-medium text-ink-gray-9">{{ shown(q) }}</span>
 					</span>
 					<Button variant="ghost" size="sm" :disabled="data.locked" @click="index = i">Change</Button>
 				</li>
 			</ul>
-
-			<div class="flex justify-end">
-				<Button variant="solid" size="md" icon-right="arrow-right" @click="router.push({ name: 'company' })">
-					Next: company details
-				</Button>
-			</div>
 		</section>
 	</div>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useRouter } from "vue-router"
 import { Button, FeatherIcon, FormControl, LoadingIndicator, toast } from "frappe-ui"
 
@@ -142,6 +204,26 @@ const loading = ref(true)
 const busy = ref(false)
 const index = ref(0)
 const number = ref("")
+const words = ref("")
+const openText = ref(false)
+const writing = ref(false)
+const reading = ref(null)
+
+const showAnswers = ref(false)
+const o = computed(() => state.overview)
+
+/** What the answers came to: the steps, the settings, the decisions. */
+const cards = computed(() => {
+	const steps = o.value?.steps || []
+	const plan = o.value?.plan || []
+	const of = (kind) => plan.filter((line) => line.kind === kind)
+	const names = (list, key) => list.slice(0, 3).map((x) => x[key]).join(", ") + (list.length > 3 ? "…" : "")
+	return [
+		{ count: steps.length, label: "kinds of data to collect", examples: names(steps, "area") },
+		{ count: of("Setting").length, label: "things we'll switch on", examples: names(of("Setting"), "title") },
+		{ count: of("Decision").length, label: "decisions for you", examples: names(of("Decision"), "title") },
+	]
+})
 
 const total = computed(() => data.value?.questions.length || 0)
 const answered = computed(() => (data.value?.questions || []).filter((q) => q.answer).length)
@@ -172,8 +254,14 @@ function shown(q) {
 }
 
 function choose(q, value) {
+	// "Not sure" is rarely the whole truth, so it opens a box to say the rest.
+	if (value === "not_sure") {
+		openText.value = true
+		nextTick(() => document.querySelector(".fvs-words, textarea")?.focus())
+		return
+	}
 	// One choice answers and moves on; several stay open until Continue.
-	if (q.type !== "Several choices" || value === "not_sure") {
+	if (q.type !== "Several choices") {
 		return answer(q, isChosen(q, value) ? "" : value, true)
 	}
 	const chosen = (q.answer || "").split(",").filter((v) => v && v !== "not_sure")
@@ -188,6 +276,30 @@ async function answer(q, value, advance = false) {
 		setOverview(await api("save_answers", { onboarding: state.id, answers: { [q.key]: value } }))
 		await load()
 		if (advance && value) goNext()
+	} catch (e) {
+		toast.error(errorText(e))
+	} finally {
+		busy.value = false
+	}
+}
+
+async function sendWords() {
+	const text = words.value.trim()
+	if (!text || busy.value) return
+	busy.value = true
+	reading.value = null
+	try {
+		const out = await api("answer_in_words", {
+			onboarding: state.id,
+			question: current.value.key,
+			text,
+		})
+		setOverview(out.overview)
+		reading.value = out
+		words.value = ""
+		await load()
+		// Read confidently: move on. Otherwise stay, so they can pick instead.
+		if (out.understood) setTimeout(() => (reading.value = null) || goNext(), 1200)
 	} catch (e) {
 		toast.error(errorText(e))
 	} finally {
@@ -232,7 +344,13 @@ watch(data, (value, old) => {
 	const first = value.questions.findIndex((q) => !q.answer)
 	index.value = first === -1 ? value.questions.length : first
 })
-watch(current, (q) => (number.value = q?.type === "Number" ? q.answer || "" : ""))
+watch(current, (q) => {
+	number.value = q?.type === "Number" ? q.answer || "" : ""
+	words.value = ""
+	reading.value = null
+	// A question already answered in words opens with them showing.
+	openText.value = q?.answer === "not_sure"
+})
 
 onMounted(() => window.addEventListener("keydown", onKey))
 onBeforeUnmount(() => window.removeEventListener("keydown", onKey))

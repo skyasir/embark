@@ -202,6 +202,41 @@ def get_interview(onboarding: str | None = None) -> dict:
 
 
 @frappe.whitelist(methods=["POST"])
+def answer_in_words(onboarding: str, question: str, text: str) -> dict:
+	"""An answer written rather than picked, read into one of the choices.
+
+	"Not sure" is a poor place to put everything a customer wants to say. They
+	can write instead, and what they wrote is kept beside whatever it was read
+	as — so a consultant sees the words, and a wrong reading is corrected by
+	picking.
+	"""
+	doc = _get_onboarding(onboarding, "write")
+	text = (text or "").strip()
+	if not text:
+		frappe.throw(_("Write something first."))
+
+	q = frappe.get_doc("Embark Question", question)
+	reading = assistant.read_answer(q, text)
+	value = reading.get("value") or ("not_sure" if q.allow_not_sure else "")
+
+	for row in doc.answers:
+		if row.question == question:
+			row.answer, row.note = value, text
+			break
+	else:
+		doc.append("answers", {"question": question, "answer": value, "note": text})
+	doc.save()
+
+	return {
+		"value": value,
+		"read_as": next((c["label"] for c in _choices(q) if c["value"] == value), value),
+		"why": reading.get("why") or "",
+		"understood": bool(reading.get("value")),
+		"overview": get_overview(doc.name),
+	}
+
+
+@frappe.whitelist(methods=["POST"])
 def save_answers(onboarding: str, answers: str | dict) -> dict:
 	"""Store the answers, then rebuild the steps they imply."""
 	doc = _get_onboarding(onboarding, "write")
@@ -220,6 +255,7 @@ def save_answers(onboarding: str, answers: str | dict) -> dict:
 		clean = _clean_answer(question, value)
 		if key in rows:
 			rows[key].answer = clean
+			rows[key].note = None
 		else:
 			doc.append("answers", {"question": key, "answer": clean})
 	doc.save()
