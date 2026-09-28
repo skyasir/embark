@@ -556,6 +556,20 @@ class TestOnboardingFlow(TestCase):
 		)
 		self.assertRaises(frappe.ValidationError, api.save_answers, self.onboarding.name, {"nope": "yes"})
 
+	def test_a_missing_column_is_one_problem_not_one_per_row(self):
+		"""A customer with 3,000 items must not be shown 3,000 errors for one column."""
+		self.answer_interview()
+		rows = [["Item Code", "Item Name", "Item Group"]]
+		rows += [[f"SKU-{i:04d}", f"Part {i}", "Products"] for i in range(50)]
+		area = self.upload("Items", rows)
+		up = area["upload"]
+
+		codes = [i["code"] for i in up["issues"]]
+		self.assertIn("COLUMN_MISSING", codes)
+		# One line about the unit column, not one per row.
+		self.assertLessEqual(codes.count("REQUIRED_MISSING"), 1)
+		self.assertLess(up["errors"], 10, up["issues"][:3])
+
 	def test_template_download(self):
 		self.answer_interview()
 		api.download_template("Customers", self.onboarding.name)

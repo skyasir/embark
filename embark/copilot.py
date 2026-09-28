@@ -159,18 +159,13 @@ def create_report(title: str, ref_doctype: str, query: str, is_standard: str = "
 	"""A Query Report: one SELECT, shown as a report in the desk."""
 	if not frappe.db.exists("DocType", ref_doctype):
 		frappe.throw(_("There is no doctype called {0}.").format(ref_doctype))
-	stripped = (query or "").strip().lower()
-	if not stripped.startswith("select"):
-		frappe.throw(_("A report's query has to be a SELECT."))
-	for word in ("insert", "update", "delete", "drop", "alter", "truncate", "grant"):
-		if f" {word} " in f" {stripped} ":
-			frappe.throw(_("A report's query cannot contain {0}.").format(word.upper()))
+	_check_query(query)
 
 	return {
 		"action": "Create",
 		"ref_doctype": "Report",
 		"ref_name": title,
-		"summary": _("Report: {0}").format(title),
+		"summary": _("Report: {0} (runs a query)").format(title),
 		"payload": json.dumps(
 			{
 				"report_name": title,
@@ -297,9 +292,56 @@ def create_client_script(doctype: str, script: str, view: str = "Form", name: st
 		"action": "Create",
 		"ref_doctype": "Client Script",
 		"ref_name": name,
-		"summary": _("Client script on {0} ({1})").format(doctype, view),
+		"summary": _("Client script on {0} ({1}) — runs code in every user's browser").format(doctype, view),
 		"payload": json.dumps({"name": name, "dt": doctype, "view": view, "enabled": 1, "script": script}),
 	}
+
+
+# A query report runs its SQL with the database's own reach, so what it may not
+# do is worth being explicit about. These are the ways a read-only-looking
+# query gets at credentials or the filesystem.
+FORBIDDEN_IN_QUERY = (
+	"insert",
+	"update",
+	"delete",
+	"drop",
+	"alter",
+	"truncate",
+	"grant",
+	"create",
+	"replace",
+	"__auth",  # password hashes
+	"information_schema",
+	"performance_schema",
+	"mysql.",
+	"into outfile",
+	"into dumpfile",
+	"load_file",
+	"benchmark(",
+	"sleep(",
+	"sys_exec",
+	"@@",  # server variables
+)
+
+
+def _check_query(query: str) -> None:
+	"""A report reads. It does not write, and it does not go looking."""
+	stripped = " ".join((query or "").strip().lower().split())
+	if not stripped.startswith("select"):
+		frappe.throw(_("A report's query has to be a SELECT."))
+	if ";" in stripped.rstrip(";"):
+		frappe.throw(_("A report is one query, not several."))
+	for word in FORBIDDEN_IN_QUERY:
+		if word in stripped:
+			frappe.throw(
+				_("A report's query cannot use {0}. It reads business tables, nothing else.").format(
+					word.strip(".(").upper()
+				)
+			)
+	if "tabuser" in stripped and any(
+		column in stripped for column in ("password", "api_key", "api_secret", "reset_password_key")
+	):
+		frappe.throw(_("A report cannot read anyone's credentials."))
 
 
 def _check_role(role: str) -> None:
