@@ -367,6 +367,55 @@ def propose(title: str, request: str = "", changes: str | list | None = None) ->
 
 
 @frappe.whitelist()
+def preview(name: str) -> list[dict]:
+	"""What each change would do, before and after, without touching the site.
+
+	A summary line says what was asked for; this says what it means. For a new
+	record "before" is empty; for an edit it is what the record holds now.
+	"""
+	_studio_user()
+	doc = frappe.get_doc("Embark Change Set", name)
+	out = []
+	for row in doc.changes:
+		payload = frappe.parse_json(row.payload) or {}
+		current = {}
+		if row.ref_name and frappe.db.exists(row.ref_doctype, row.ref_name):
+			existing = frappe.get_doc(row.ref_doctype, row.ref_name)
+			current = {key: existing.get(key) for key in payload}
+		out.append(
+			{
+				"summary": row.summary,
+				"action": row.action,
+				"doctype": row.ref_doctype,
+				"name": row.ref_name,
+				"lines": [
+					{
+						"field": key,
+						"before": _shown(current.get(key)),
+						"after": _shown(value),
+					}
+					for key, value in payload.items()
+					if _shown(value) != _shown(current.get(key))
+				],
+			}
+		)
+	return out
+
+
+def _shown(value) -> str:
+	"""A value as a person reads it, not as the database stores it."""
+	if value in (None, "", []):
+		return ""
+	if value is True or value == 1:
+		return "Yes"
+	if value is False or value == 0:
+		return "No"
+	if isinstance(value, list | dict):
+		return json.dumps(value, default=str)[:200]
+	return str(value)[:200]
+
+
+@frappe.whitelist()
 def apply(name: str) -> dict:
 	_studio_user()
 	doc = frappe.get_doc("Embark Change Set", name)
