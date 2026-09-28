@@ -52,7 +52,31 @@
 						<ul class="list-disc space-y-1 px-3 py-2 pl-7 text-sm text-ink-gray-7">
 							<li v-for="(c, j) in m.set.changes" :key="j">{{ c.summary }}</li>
 						</ul>
+
+						<!-- What it means, before and after, without touching the site. -->
+						<div v-if="m.preview" class="border-t border-outline-gray-1 px-3 py-2">
+							<div v-for="(p, j) in m.preview" :key="j" class="mb-2 last:mb-0">
+								<div class="text-sm font-medium text-ink-gray-7">
+									{{ p.action }} · {{ p.doctype }}
+								</div>
+								<table class="mt-1 w-full text-sm">
+									<tbody>
+										<tr v-for="(line, k) in p.lines" :key="k" class="align-top">
+											<td class="py-0.5 pr-2 text-ink-gray-5">{{ line.field }}</td>
+											<td class="py-0.5 pr-2 text-ink-gray-5 line-through" :class="line.before ? '' : 'opacity-40'">
+												{{ line.before || "—" }}
+											</td>
+											<td class="py-0.5 text-ink-gray-8">{{ line.after || "—" }}</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+
 						<div class="flex gap-2 border-t border-outline-gray-1 px-3 py-2">
+							<Button size="sm" variant="ghost" :loading="m.loading" @click="showPreview(m)">
+								{{ m.preview ? "Hide" : "What changes" }}
+							</Button>
 							<Button v-if="m.set.status !== 'Applied'" size="sm" :loading="m.busy" @click="run(m, 'apply')">
 								Apply
 							</Button>
@@ -142,7 +166,7 @@ async function send(text) {
 		// Everything it did, in the order it did it.
 		;(result.steps || []).forEach((step) => messages.value.push({ role: "step", step }))
 		if (result.reply) messages.value.push({ role: "assistant", content: result.reply })
-		if (result.change_set) messages.value.push({ role: "change", set: result.change_set, busy: false })
+		if (result.change_set) messages.value.push({ role: "change", set: result.change_set, busy: false, loading: false, preview: null })
 		// Answers it saved change the checklist behind the panel.
 		if (result.overview) setOverview(result.overview)
 	} catch (e) {
@@ -168,6 +192,21 @@ function said() {
 
 function detail(step) {
 	return JSON.stringify(step.arguments || {}, null, 2) + "\n\n" + (step.outcome || "")
+}
+
+async function showPreview(message) {
+	if (message.preview) {
+		message.preview = null
+		return
+	}
+	message.loading = true
+	try {
+		message.preview = await callMethod("embark.copilot.preview", { name: message.set.name })
+	} catch (e) {
+		toast.error(errorText(e))
+	} finally {
+		message.loading = false
+	}
 }
 
 async function run(message, action) {
