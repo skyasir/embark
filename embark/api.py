@@ -56,6 +56,10 @@ def get_overview(onboarding: str | None = None) -> dict:
 			"is_staff": is_staff(),
 			"user": {"name": frappe.session.user, "full_name": get_fullname(frappe.session.user)},
 			"can_use_desk": True,
+			# Setting up the AI is something to do before starting, not after.
+			"can_configure_ai": _can_configure_ai(),
+			"assistant": assistant.is_on(),
+			"assistant_model": assistant.model_name(),
 		}
 	doc = _get_onboarding(onboarding)
 	# Readiness and step status are derived, so recompute them for the read: a

@@ -405,7 +405,11 @@ def propose(title: str, request: str = "", changes: str | list | None = None) ->
 			"changes": rows,
 		}
 	).insert(ignore_permissions=True)
-	return _as_dict(doc)
+
+	# Asked for is done. The record stays as the account of what changed, not as
+	# a thing waiting for a button.
+	doc.apply()
+	return _as_dict(doc.reload())
 
 
 @frappe.whitelist()

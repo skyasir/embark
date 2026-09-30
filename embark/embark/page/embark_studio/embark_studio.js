@@ -381,10 +381,7 @@ frappe.embark_studio.Workbench = class Workbench {
 					<span class="fvs-changeset-status"></span>
 				</div>
 				<ul class="fvs-changeset-list"></ul>
-				<div class="fvs-changeset-actions">
-					<button class="fvs-btn fvs-changeset-apply">${__("Apply")}</button>
-					<button class="fvs-btn fvs-changeset-undo" style="display:none">${__("Undo")}</button>
-				</div>
+
 			</div>
 		`);
 		$card.find(".fvs-changeset-title").text(cs.title);
@@ -392,28 +389,6 @@ frappe.embark_studio.Workbench = class Workbench {
 		(cs.changes || []).forEach((c) => {
 			$("<li></li>").text(c.summary || `${c.action} ${c.doctype}`).appendTo($card.find(".fvs-changeset-list"));
 		});
-
-		const run = async (method, $btn) => {
-			$btn.prop("disabled", true);
-			try {
-				const out = await frappe.xcall(`embark.copilot.${method}`, { name: cs.name });
-				$card.find(".fvs-changeset-status").text(out.status);
-				$card.find(".fvs-changeset-apply").toggle(out.status !== "Applied");
-				$card.find(".fvs-changeset-undo").toggle(out.status === "Applied");
-				frappe.show_alert({
-					message: out.status === "Applied" ? __("Applied") : __("Undone"),
-					indicator: "green",
-				});
-				// A changed form is a changed site: the editor's data may be stale.
-				frappe.clear_cache();
-			} catch (e) {
-				this.copilot_say("system", e.message || __("That did not work."));
-			} finally {
-				$btn.prop("disabled", false);
-			}
-		};
-		$card.find(".fvs-changeset-apply").on("click", (e) => run("apply", $(e.currentTarget)));
-		$card.find(".fvs-changeset-undo").on("click", (e) => run("undo", $(e.currentTarget)));
 
 		this.$copilot_log.append($card);
 		this.$copilot_log.scrollTop(this.$copilot_log[0].scrollHeight);

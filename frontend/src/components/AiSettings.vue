@@ -17,18 +17,37 @@
 					label="Offer the chat on this site"
 				/>
 				<FormControl
-					v-model="form.provider"
+					v-model="preset"
 					type="select"
-					label="Provider"
-					:options="['OpenAI compatible', 'Anthropic']"
-					description="&quot;OpenAI compatible&quot; covers OpenAI, Ollama, vLLM and anything else serving /chat/completions."
+					label="Where the AI runs"
+					:options="presetOptions"
+					description="Pick one and paste a key. Groq and Google give keys away free."
+					@update:model-value="usePreset"
 				/>
-				<FormControl
-					v-model="form.base_url"
-					label="Address"
-					placeholder="https://api.openai.com/v1"
-					description="A local model runs at http://localhost:11434/v1."
-				/>
+
+				<div v-if="chosen?.how" class="rounded-lg bg-surface-gray-2 px-3 py-2 text-sm text-ink-gray-7">
+					{{ chosen.how }}
+					<a
+						v-if="chosen.link"
+						:href="chosen.link"
+						target="_blank"
+						rel="noopener"
+						class="underline hover:text-ink-gray-9"
+					>
+						Get a key
+					</a>
+				</div>
+
+				<div v-if="preset === 'Something else'" class="space-y-4">
+					<FormControl
+						v-model="form.provider"
+						type="select"
+						label="Provider"
+						:options="['OpenAI compatible', 'Anthropic']"
+					/>
+					<FormControl v-model="form.base_url" label="Address" placeholder="https://api.openai.com/v1" />
+				</div>
+
 				<FormControl v-model="form.model" label="Model" placeholder="gpt-4o-mini" />
 				<FormControl
 					v-model="form.api_key"
@@ -46,13 +65,70 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch } from "vue"
+import { computed, reactive, ref, watch } from "vue"
 import { Button, Dialog, FormControl, LoadingIndicator, toast } from "frappe-ui"
 
 import { api, errorText } from "../data/api"
 import { loadOverview } from "../data/store"
 
 const show = defineModel({ type: Boolean })
+
+// The endpoints worth naming, so nobody has to look one up. Free tiers first.
+const PRESETS = [
+	{
+		label: "Groq (free)",
+		provider: "OpenAI compatible",
+		base_url: "https://api.groq.com/openai/v1",
+		model: "llama-3.3-70b-versatile",
+		how: "Free, fast, and good at tools. Sign in with Google and copy the key.",
+		link: "https://console.groq.com/keys",
+	},
+	{
+		label: "Google Gemini (free tier)",
+		provider: "OpenAI compatible",
+		base_url: "https://generativelanguage.googleapis.com/v1beta/openai",
+		model: "gemini-2.0-flash",
+		how: "A free tier that is plenty for onboarding a few customers.",
+		link: "https://aistudio.google.com/apikey",
+	},
+	{
+		label: "OpenAI",
+		provider: "OpenAI compatible",
+		base_url: "https://api.openai.com/v1",
+		model: "gpt-4o-mini",
+		how: "Paid, a few paise per onboarding.",
+		link: "https://platform.openai.com/api-keys",
+	},
+	{
+		label: "Anthropic (Claude)",
+		provider: "Anthropic",
+		base_url: "https://api.anthropic.com",
+		model: "claude-sonnet-4-6",
+		how: "Paid. The sharpest of these at following instructions.",
+		link: "https://console.anthropic.com/settings/keys",
+	},
+	{
+		label: "On this server (Ollama)",
+		provider: "OpenAI compatible",
+		base_url: "http://localhost:11434/v1",
+		model: "qwen2.5:7b",
+		how: "Nothing leaves the machine. Needs no key, and is the weakest of these.",
+		link: "",
+	},
+	{ label: "Something else", provider: "OpenAI compatible", base_url: "", model: "", how: "", link: "" },
+]
+
+const preset = ref(PRESETS[0].label)
+const presetOptions = PRESETS.map((p) => p.label)
+const chosen = computed(() => PRESETS.find((p) => p.label === preset.value))
+
+function usePreset(label) {
+	const p = PRESETS.find((x) => x.label === label)
+	if (!p || p.label === "Something else") return
+	form.provider = p.provider
+	form.base_url = p.base_url
+	form.model = p.model
+}
 
 const loading = ref(false)
 const saving = ref(false)
@@ -65,6 +141,11 @@ watch(show, async (open) => {
 	try {
 		settings.value = await api("ai_settings")
 		Object.assign(form, { ...settings.value, api_key: "" })
+		// Show the preset this site is already on, if it is one of them.
+		preset.value =
+			PRESETS.find((p) => p.base_url === form.base_url)?.label ||
+			(form.base_url ? "Something else" : PRESETS[0].label)
+		if (!form.base_url) usePreset(preset.value)
 	} catch (e) {
 		toast.error(errorText(e))
 	} finally {

@@ -15,7 +15,17 @@
 				placeholder="Sunrise Traders"
 				description="Shown on every screen. You can change it later."
 			/>
-			<div class="flex justify-end">
+			<div class="flex items-center justify-between gap-3">
+				<Button
+					v-if="o?.can_configure_ai"
+					variant="ghost"
+					size="md"
+					icon-left="cpu"
+					@click="$emit('configure-ai')"
+				>
+					Configure AI
+				</Button>
+				<span v-else />
 				<Button
 					type="submit"
 					variant="solid"
@@ -32,12 +42,15 @@
 </template>
 
 <script setup>
-import { ref } from "vue"
-import { FormControl, toast } from "frappe-ui"
+import { computed, ref } from "vue"
+import { Button, FormControl, toast } from "frappe-ui"
 
 import { api, errorText } from "../data/api"
-import { setOverview } from "../data/store"
+import { setOverview, state } from "../data/store"
 
+defineEmits(["configure-ai"])
+
+const o = computed(() => state.overview)
 const clientName = ref("")
 const saving = ref(false)
 

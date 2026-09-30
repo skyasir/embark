@@ -27,13 +27,9 @@ class TestCopilot(FrappeTestCase):
 
 	def test_a_field_is_added_and_can_be_taken_back(self):
 		change = copilot.add_field("Item", "PO Number", "Data", insert_after="item_name")
+		# Asked for is done: proposing applies it and keeps the record.
 		plan = copilot.propose("Add PO Number to Item", "add a PO number to items", [change])
-		self.assertEqual(plan["status"], "Draft")
-		# Nothing has happened to the site yet.
-		self.assertIsNone(frappe.get_meta("Item").get_field("po_number"))
-
-		applied = copilot.apply(plan["name"])
-		self.assertEqual(applied["status"], "Applied")
+		self.assertEqual(plan["status"], "Applied")
 		frappe.clear_cache(doctype="Item")
 		self.assertIsNotNone(frappe.get_meta("Item").get_field("po_number"))
 
@@ -46,10 +42,11 @@ class TestCopilot(FrappeTestCase):
 		before = frappe.get_meta("Item").get_field("item_name").label
 		change = copilot.set_property("Item", "item_name", "label", "Product Name")
 		plan = copilot.propose("Rename Item Name", "call it Product Name", [change])
-		copilot.apply(plan["name"])
 		frappe.clear_cache(doctype="Item")
 		self.assertEqual(frappe.get_meta("Item").get_field("item_name").label, "Product Name")
 
+		# The chat has no Undo button, but the snapshot is kept and the record can
+		# still be reversed by whoever holds the site.
 		copilot.undo(plan["name"])
 		frappe.clear_cache(doctype="Item")
 		self.assertEqual(frappe.get_meta("Item").get_field("item_name").label, before)
@@ -67,7 +64,6 @@ class TestCopilot(FrappeTestCase):
 			],
 		)
 		plan = copilot.propose("Item approval", "items should be approved", rows)
-		copilot.apply(plan["name"])
 		self.assertTrue(frappe.db.exists("Workflow", "Copilot Item Approval"))
 
 		copilot.undo(plan["name"])
@@ -197,9 +193,17 @@ class TestCopilot(FrappeTestCase):
 			"summary": "nonsense",
 			"payload": "{}",
 		}
-		plan = copilot.propose("Half broken", "two changes, one impossible", [good, bad])
-		self.assertRaises(frappe.DoesNotExistError, copilot.apply, plan["name"])
+		self.assertRaises(
+			frappe.DoesNotExistError,
+			copilot.propose,
+			"Half broken",
+			"two changes, one impossible",
+			[good, bad],
+		)
 
+		# The first change was made and then put back, so the site is as it was.
 		frappe.clear_cache(doctype="Item")
 		self.assertIsNone(frappe.get_meta("Item").get_field("shelf_code"))
-		self.assertEqual(frappe.db.get_value("Embark Change Set", plan["name"], "status"), "Failed")
+		self.assertEqual(
+			frappe.db.get_value("Embark Change Set", {"title": "Half broken"}, "status"), "Failed"
+		)
