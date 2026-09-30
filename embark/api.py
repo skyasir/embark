@@ -25,7 +25,7 @@ from embark.embark.doctype.embark_onboarding.embark_onboarding import (
 )
 from embark.engine import build_columns
 from embark.permissions import is_staff
-from embark.sheets import prepared_zip, template_xlsx
+from embark.sheets import prepared_zip, template_xlsx, typed_xlsx
 
 # The company questions the customer answers on the portal.
 COMPANY_FIELDS = (
@@ -42,6 +42,8 @@ COMPANY_FIELDS = (
 
 MAX_ISSUES_SENT = 500
 PREVIEW_ROWS = 20
+# Typing is for a handful of rows; past that a spreadsheet is the right tool.
+MAX_TYPED_ROWS = 200
 
 
 # ── Customer portal ───────────────────────────────────────────────────────────
@@ -379,6 +381,40 @@ def download_template(area: str, onboarding: str | None = None):
 	area_doc = frappe.get_doc("Embark Data Area", area)
 	area_doc.check_permission("read")
 	_send_file(_("{0} - template.xlsx").format(area_doc.area_name), template_xlsx(area_doc, doc.answer_map()))
+
+
+@frappe.whitelist(methods=["POST"])
+def enter_rows(onboarding: str, area: str, rows: str | list) -> dict:
+	"""Rows typed into the screen instead of uploaded as a file.
+
+	Three warehouses do not deserve a spreadsheet. What is typed becomes one
+	anyway, so the checks, the fixes and the export are the same either way —
+	and it can be downloaded afterwards like any other upload.
+	"""
+	doc = _get_onboarding(onboarding, "write")
+	_ensure_area(doc, area)
+	if _locked(doc):
+		frappe.throw(_("This onboarding has been sent for review."))
+
+	given = [r for r in (frappe.parse_json(rows) or []) if any(cstr(v).strip() for v in r.values())]
+	if not given:
+		frappe.throw(_("Fill in at least one row."))
+	if len(given) > MAX_TYPED_ROWS:
+		frappe.throw(_("That many rows is a file, not a form. Upload a spreadsheet instead."))
+
+	area_doc = frappe.get_doc("Embark Data Area", area)
+	content = typed_xlsx(area_doc, given, doc.answer_map())
+	file = frappe.get_doc(
+		{
+			"doctype": "File",
+			"file_name": f"{frappe.scrub(area)}-typed.xlsx",
+			"content": content,
+			"is_private": 1,
+			"attached_to_doctype": "Embark Onboarding",
+			"attached_to_name": doc.name,
+		}
+	).insert(ignore_permissions=True)
+	return attach_file(doc.name, area, file.file_url)
 
 
 @frappe.whitelist(methods=["POST"])
