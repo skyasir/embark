@@ -596,6 +596,25 @@ class TestOnboardingFlow(TestCase):
 			frappe.ValidationError, api.enter_rows, self.onboarding.name, "Warehouses", [{}] * 300
 		)
 
+	def test_standard_masters_count_as_known(self):
+		"""Standard Selling is ERPNext's own price list, not a typo."""
+		self.answer_interview(price_lists="yes")
+		area = self.upload(
+			"Item Prices",
+			[
+				["Item Code", "Price List", "Rate"],
+				["SKU-1", "Standard Selling", "100"],
+				["SKU-1", "Standard Buying", "80"],
+				["SKU-1", "Wholesael", "90"],  # a real typo, and no list of that name
+			],
+		)
+		up = area["upload"]
+		unknown = [i for i in up["issues"] if i["code"] == "NOT_FOUND" and i["fieldname"] == "price_list"]
+		self.assertEqual([i["value"] for i in unknown], ["Wholesael"], up["issues"])
+		# And a suggestion is never the value already typed.
+		for issue in up["issues"]:
+			self.assertNotIn(issue["value"], issue.get("suggestions", []))
+
 	def test_template_download(self):
 		self.answer_interview()
 		api.download_template("Customers", self.onboarding.name)

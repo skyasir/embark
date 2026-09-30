@@ -13,6 +13,8 @@ import frappe
 # ERPNext v15 writes these records inline in install_fixtures.install(); v16 moved
 # them into get_preset_records(), which is used when it exists.
 V15_NAMES = {
+	# The two price lists ERPNext's setup wizard always creates.
+	"Price List": ["Standard Selling", "Standard Buying"],
 	"Item Group": ["All Item Groups", "Products", "Raw Material", "Services", "Sub Assemblies", "Consumable"],
 	"Customer Group": ["All Customer Groups", "Individual", "Commercial", "Non Profit", "Government"],
 	"Supplier Group": [
