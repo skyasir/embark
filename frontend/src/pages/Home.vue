@@ -1,5 +1,5 @@
 <template>
-	<StartOnboarding v-if="o && o.needs_start" />
+	<StartOnboarding v-if="o && o.needs_start" @configure-ai="aiOpen = true" />
 	<div v-else-if="o" class="space-y-6">
 		<ConsultantPanel v-if="o.is_staff" :o="o" />
 		<div>
@@ -129,6 +129,8 @@
 			</Button>
 		</div>
 	</div>
+
+	<AiSettings v-model="aiOpen" />
 </template>
 
 <script setup>
@@ -137,6 +139,7 @@ import { Badge, toast } from "frappe-ui"
 
 import Callout from "../components/Callout.vue"
 import ConsultantPanel from "../components/ConsultantPanel.vue"
+import AiSettings from "../components/AiSettings.vue"
 import StartOnboarding from "../components/StartOnboarding.vue"
 import PlanSection from "../components/PlanSection.vue"
 import StepRow from "../components/StepRow.vue"
@@ -146,6 +149,7 @@ import { loadOverview, setOverview, state } from "../data/store"
 
 const o = computed(() => state.overview)
 const submitting = ref(false)
+const aiOpen = ref(false)
 
 // The checklist is built once the interview is answered, not before.
 const planned = computed(() => o.value.steps.length > 0)

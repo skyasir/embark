@@ -75,12 +75,8 @@
 
 						<div class="flex gap-2 border-t border-outline-gray-1 px-3 py-2">
 							<Button size="sm" variant="ghost" :loading="m.loading" @click="showPreview(m)">
-								{{ m.preview ? "Hide" : "What changes" }}
+								{{ m.preview ? "Hide" : "What changed" }}
 							</Button>
-							<Button v-if="m.set.status !== 'Applied'" size="sm" :loading="m.busy" @click="run(m, 'apply')">
-								Apply
-							</Button>
-							<Button v-else size="sm" :loading="m.busy" @click="run(m, 'undo')">Undo</Button>
 						</div>
 					</div>
 
@@ -206,19 +202,6 @@ async function showPreview(message) {
 		toast.error(errorText(e))
 	} finally {
 		message.loading = false
-	}
-}
-
-async function run(message, action) {
-	message.busy = true
-	try {
-		const out = await callMethod(`embark.copilot.${action}`, { name: message.set.name })
-		message.set.status = out.status
-		toast.success(out.status === "Applied" ? "Applied" : "Undone")
-	} catch (e) {
-		toast.error(errorText(e))
-	} finally {
-		message.busy = false
 	}
 }
 
