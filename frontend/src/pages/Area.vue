@@ -87,21 +87,43 @@
 					<table class="w-full text-left text-base">
 						<thead class="bg-surface-gray-1 text-ink-gray-6">
 							<tr>
-								<th v-for="c in data.columns" :key="c.fieldname" class="px-3 py-2 font-medium">
-									{{ c.label }}<span v-if="c.required" class="text-ink-red-3"> *</span>
+								<th v-for="c in data.columns" :key="c.fieldname" class="px-3 py-2">
+									<span class="font-medium">{{ c.label }}</span>
+									<span v-if="c.required" class="text-ink-red-3"> *</span>
+									<span class="block text-sm font-normal text-ink-gray-4">{{ kindOf(c) }}</span>
 								</th>
 								<th class="w-10 px-2 py-2" />
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-outline-gray-1">
 							<tr v-for="(row, i) in typed" :key="i">
+								<!-- Each cell is what the field actually is: a yes/no, a list of
+								     choices, a date, a number, or a link with what exists to pick. -->
 								<td v-for="c in data.columns" :key="c.fieldname" class="px-1 py-1">
-									<input
+									<select
+										v-if="c.fieldtype === 'Check' || c.choices.length"
 										v-model="row[c.fieldname]"
-										class="w-full rounded border-0 bg-transparent px-2 py-1.5 text-base text-ink-gray-8 placeholder:text-ink-gray-4 focus:bg-surface-gray-1 focus:outline-none"
-										:placeholder="i === 0 ? c.example || '' : ''"
-										@keydown.enter.prevent="addRow(i)"
-									/>
+										class="w-full rounded border-0 bg-transparent px-2 py-1.5 text-base text-ink-gray-8 focus:bg-surface-gray-1 focus:outline-none"
+									>
+										<option value="">—</option>
+										<option v-for="option in cellOptions(c)" :key="option" :value="option">
+											{{ option }}
+										</option>
+									</select>
+									<template v-else>
+										<input
+											v-model="row[c.fieldname]"
+											:type="inputType(c)"
+											:list="c.link_doctype ? `list-${c.fieldname}` : undefined"
+											:maxlength="c.max_length || undefined"
+											class="w-full rounded border-0 bg-transparent px-2 py-1.5 text-base text-ink-gray-8 placeholder:text-ink-gray-4 focus:bg-surface-gray-1 focus:outline-none"
+											:placeholder="i === 0 ? c.example || '' : ''"
+											@keydown.enter.prevent="addRow(i)"
+										/>
+										<datalist v-if="c.link_doctype" :id="`list-${c.fieldname}`">
+											<option v-for="option in suggestionsFor(c)" :key="option" :value="option" />
+										</datalist>
+									</template>
 								</td>
 								<td class="px-1 py-1">
 									<Button
@@ -383,6 +405,33 @@ async function run(method, args, message) {
 	} finally {
 		busy.value = false
 	}
+}
+
+/** A cell is the field it stands for: yes/no, a choice, a date, a number. */
+function inputType(c) {
+	if (c.fieldtype === "Date") return "date"
+	if (["Int", "Float", "Currency", "Percent"].includes(c.fieldtype)) return "number"
+	if (c.fieldtype === "Email") return "email"
+	return "text"
+}
+
+function kindOf(c) {
+	if (c.fieldtype === "Check") return "Yes or No"
+	if (c.choices.length) return c.choices.slice(0, 3).join(" / ") + (c.choices.length > 3 ? "…" : "")
+	if (c.link_doctype) return `An existing ${c.link_doctype.toLowerCase()}`
+	if (["Int", "Float", "Currency", "Percent"].includes(c.fieldtype)) return "A number"
+	if (c.fieldtype === "Date") return "A date"
+	if (c.fieldtype === "Email") return "An email"
+	return ""
+}
+
+function cellOptions(c) {
+	return c.fieldtype === "Check" ? ["Yes", "No"] : c.choices
+}
+
+/** What already exists for a Link column: ERPNext's own records and your other sheets. */
+function suggestionsFor(c) {
+	return (data.value?.suggestions || {})[c.link_doctype] || []
 }
 
 function emptyRow() {

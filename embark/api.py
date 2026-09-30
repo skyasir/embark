@@ -23,6 +23,7 @@ from embark.conditions import applies
 from embark.embark.doctype.embark_onboarding.embark_onboarding import (
 	LOCKED_STATUSES,
 )
+from embark.embark.doctype.embark_upload.embark_upload import known_values
 from embark.engine import build_columns
 from embark.permissions import is_staff
 from embark.sheets import prepared_zip, template_xlsx, typed_xlsx
@@ -326,7 +327,10 @@ def get_area(onboarding: str, area: str) -> dict:
 	_ensure_area(doc, area)
 	area_doc = frappe.get_cached_doc("Embark Data Area", area)
 	answers = doc.answer_map()
+	columns = build_columns(area_doc, answers)
+	suggestions = known_values(doc.name, columns)
 	out = {
+		"suggestions": {dt: sorted(values.values())[:200] for dt, values in suggestions.items()},
 		"area": {
 			"name": area_doc.name,
 			"description": area_doc.description,
@@ -334,7 +338,7 @@ def get_area(onboarding: str, area: str) -> dict:
 			"icon": area_doc.icon,
 			"required": next(bool(r.required) for r in doc.areas if r.data_area == area),
 		},
-		"columns": [c.as_dict() for c in build_columns(area_doc, answers)],
+		"columns": [c.as_dict() for c in columns],
 		"locked": _locked(doc),
 		"upload": None,
 	}
