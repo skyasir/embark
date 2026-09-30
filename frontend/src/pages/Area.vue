@@ -74,14 +74,17 @@
 								     choices, a date, a number, or a link with what exists to pick. -->
 								<td v-for="c in data.columns" :key="c.fieldname" class="px-1 py-1">
 									<select
-										v-if="c.fieldtype === 'Check' || c.choices.length"
+										v-if="dropdown(c, i)"
 										v-model="row[c.fieldname]"
 										class="w-full rounded border-0 bg-transparent px-2 py-1.5 text-base text-ink-gray-8 focus:bg-surface-gray-1 focus:outline-none"
+										@change="onCell(c, row, i)"
 									>
 										<option value="">—</option>
 										<option v-for="option in cellOptions(c)" :key="option" :value="option">
 											{{ option }}
 										</option>
+										<!-- A link to something that does not exist yet is still allowed. -->
+										<option v-if="c.link_doctype" :value="OTHER">Something else…</option>
 									</select>
 									<template v-else>
 										<input
@@ -433,8 +436,29 @@ function kindOf(c) {
 	return ""
 }
 
+const OTHER = "__other__"
+const freeText = ref(new Set())
+
+/**
+ * A short list is a dropdown; a long one is a box with suggestions, because
+ * nobody scrolls two hundred units of measure.
+ */
+function dropdown(c, row) {
+	if (freeText.value.has(`${row}:${c.fieldname}`)) return false
+	if (c.fieldtype === "Check" || c.choices.length) return true
+	return !!c.link_doctype && suggestionsFor(c).length > 0 && suggestionsFor(c).length <= 25
+}
+
 function cellOptions(c) {
-	return c.fieldtype === "Check" ? ["Yes", "No"] : c.choices
+	if (c.fieldtype === "Check") return ["Yes", "No"]
+	return c.choices.length ? c.choices : suggestionsFor(c)
+}
+
+/** "Something else…" turns that one cell into a plain box. */
+function onCell(c, row, i) {
+	if (row[c.fieldname] !== OTHER) return
+	row[c.fieldname] = ""
+	freeText.value = new Set(freeText.value).add(`${i}:${c.fieldname}`)
 }
 
 /** What already exists for a Link column: ERPNext's own records and your other sheets. */
