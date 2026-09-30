@@ -4,85 +4,58 @@
 	</div>
 
 	<div v-else-if="data" class="space-y-6">
-		<Stepper :steps="wizard" :current="step" @select="step = $event" />
+		<Stepper v-if="data.upload" :steps="wizard" :current="step" @select="step = $event" />
 
 		<Callout v-if="data.locked" tone="info">Your data is with your consultant, so it can't be changed now.</Callout>
 
-		<!-- 1. Upload -->
+		<!-- 1. Give us the data, whichever way suits the list. -->
 		<section v-if="step === 0" class="space-y-6">
 			<div>
-				<h1 class="flex items-center gap-2.5 text-2xl font-semibold text-ink-gray-9">
-					<span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-gray-2 text-ink-gray-7">
-						<FeatherIcon :name="data.area.icon || 'file-text'" class="size-4" />
-					</span>
-					{{ data.area.name }}
-				</h1>
+				<p class="text-sm font-medium uppercase tracking-wide text-ink-gray-4">
+					Step {{ position }} of {{ o?.steps.length || 0 }}
+				</p>
+				<h1 class="mt-1 text-2xl font-semibold leading-snug text-ink-gray-9">{{ data.area.name }}</h1>
 				<p class="mt-2 text-base leading-relaxed text-ink-gray-6">
 					{{ data.area.description }}
-					<template v-if="!data.area.required">This step is optional.</template>
+					<template v-if="data.area.because"> We ask because {{ data.area.because }}.</template>
+					<template v-if="!data.area.required"> You can skip this one.</template>
 				</p>
 			</div>
 
 			<Callout v-if="data.area.help_text">{{ data.area.help_text }}</Callout>
 
-			<div class="space-y-3">
-				<h2 class="text-base font-semibold text-ink-gray-8">First, put your data in a sheet</h2>
-				<p class="text-base leading-relaxed text-ink-gray-7">
-					Download our template, or use your own Excel or CSV file. Any layout works as long as the
-					first row has column headings; we match them for you next.
-				</p>
-				<div class="flex flex-wrap gap-2">
-					<Button size="md" icon-left="download" @click="downloadTemplate">Download template</Button>
-					<Button size="md" variant="ghost" :icon-right="showColumns ? 'chevron-up' : 'chevron-down'" @click="showColumns = !showColumns">
-						Columns we look for
-					</Button>
-				</div>
-				<div v-if="showColumns" class="overflow-x-auto rounded-lg border border-outline-gray-2">
-					<table class="w-full text-left text-base">
-						<thead class="bg-surface-gray-1 text-ink-gray-6">
-							<tr>
-								<th class="px-3 py-2 font-medium">Column</th>
-								<th class="px-3 py-2 font-medium">What to enter</th>
-								<th class="px-3 py-2 font-medium">Example</th>
-							</tr>
-						</thead>
-						<tbody class="divide-y divide-outline-gray-1">
-							<tr v-for="c in data.columns" :key="c.fieldname">
-								<td class="whitespace-nowrap px-3 py-2 font-medium text-ink-gray-8">
-									{{ c.label }}<span v-if="c.required" class="text-ink-red-3"> *</span>
-								</td>
-								<td class="px-3 py-2 text-ink-gray-6">{{ describe(c) }}</td>
-								<td class="whitespace-nowrap px-3 py-2 text-ink-gray-6">{{ c.example }}</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
+			<!-- Two ways in. The short list is typed; the long one is a file. -->
+			<div v-if="!data.locked && !mode" class="grid gap-3 sm:grid-cols-2">
+				<button
+					class="rounded-lg border border-outline-gray-2 p-4 text-left transition-colors hover:border-outline-gray-3 hover:bg-surface-gray-1"
+					@click="startTyping"
+				>
+					<FeatherIcon name="edit-3" class="size-5 text-ink-gray-6" />
+					<div class="mt-2 text-base font-medium text-ink-gray-9">Type them in</div>
+					<div class="mt-1 text-base text-ink-gray-6">
+						Quickest for a short list. We'll show you the columns.
+					</div>
+				</button>
+				<button
+					class="rounded-lg border border-outline-gray-2 p-4 text-left transition-colors hover:border-outline-gray-3 hover:bg-surface-gray-1"
+					@click="mode = 'file'"
+				>
+					<FeatherIcon name="upload-cloud" class="size-5 text-ink-gray-6" />
+					<div class="mt-2 text-base font-medium text-ink-gray-9">Upload a spreadsheet</div>
+					<div class="mt-1 text-base text-ink-gray-6">
+						Use the file you already keep, or our template. Any layout works.
+					</div>
+				</button>
 			</div>
 
-			<!-- A handful of rows is quicker typed than exported, so both are here. -->
-			<div v-if="!data.locked" class="space-y-3">
-				<div class="flex gap-2">
-					<Button
-						size="md"
-						:variant="mode === 'file' ? 'subtle' : 'ghost'"
-						icon-left="upload"
-						@click="mode = 'file'"
-					>
-						Upload a file
-					</Button>
-					<Button
-						size="md"
-						:variant="mode === 'type' ? 'subtle' : 'ghost'"
-						icon-left="edit-3"
-						@click="startTyping"
-					>
-						Type them in
-					</Button>
-				</div>
+			<div v-if="!data.locked && mode" class="flex items-center gap-2">
+				<Button variant="ghost" size="sm" icon-left="chevron-left" @click="mode = ''">Other way</Button>
+				<span class="text-base text-ink-gray-6">
+					{{ mode === "type" ? "Typing them in" : "Uploading a spreadsheet" }}
+				</span>
 			</div>
 
 			<div v-if="!data.locked && mode === 'type'" class="space-y-3">
-				<h2 class="text-base font-semibold text-ink-gray-8">Type your {{ data.area.name.toLowerCase() }}</h2>
 				<div class="overflow-x-auto rounded-lg border border-outline-gray-2">
 					<table class="w-full text-left text-base">
 						<thead class="bg-surface-gray-1 text-ink-gray-6">
@@ -142,13 +115,43 @@
 				<div class="flex items-center justify-between">
 					<Button size="md" variant="ghost" icon-left="plus" @click="addRow()">Add a row</Button>
 					<Button variant="solid" size="md" :loading="busy" :disabled="!hasTyped" @click="saveTyped">
-						Check these {{ filledCount }} {{ filledCount === 1 ? "row" : "rows" }}
+						Save {{ filledCount }} {{ filledCount === 1 ? "row" : "rows" }}
 					</Button>
 				</div>
 			</div>
 
 			<div v-if="!data.locked && mode === 'file'" class="space-y-3">
-				<h2 class="text-base font-semibold text-ink-gray-8">Then upload it here</h2>
+				<div class="flex flex-wrap gap-2">
+					<Button size="md" icon-left="download" @click="downloadTemplate">Download our template</Button>
+					<Button
+						size="md"
+						variant="ghost"
+						:icon-right="showColumns ? 'chevron-up' : 'chevron-down'"
+						@click="showColumns = !showColumns"
+					>
+						Columns we look for
+					</Button>
+				</div>
+				<div v-if="showColumns" class="overflow-x-auto rounded-lg border border-outline-gray-2">
+					<table class="w-full text-left text-base">
+						<thead class="bg-surface-gray-1 text-ink-gray-6">
+							<tr>
+								<th class="px-3 py-2 font-medium">Column</th>
+								<th class="px-3 py-2 font-medium">What to enter</th>
+								<th class="px-3 py-2 font-medium">Example</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-outline-gray-1">
+							<tr v-for="c in data.columns" :key="c.fieldname">
+								<td class="whitespace-nowrap px-3 py-2 font-medium text-ink-gray-8">
+									{{ c.label }}<span v-if="c.required" class="text-ink-red-3"> *</span>
+								</td>
+								<td class="px-3 py-2 text-ink-gray-6">{{ describe(c) }}</td>
+								<td class="whitespace-nowrap px-3 py-2 text-ink-gray-6">{{ c.example }}</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
 				<label
 					class="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-6 py-10 text-center transition-colors"
 					:class="dragging ? 'border-outline-gray-5 bg-surface-gray-1' : 'border-outline-gray-2 hover:bg-surface-gray-1'"
@@ -189,10 +192,10 @@
 		<!-- 2. Match columns -->
 		<section v-else-if="step === 1 && data.upload" class="space-y-6">
 			<div>
-				<h1 class="text-2xl font-semibold text-ink-gray-9">Match your columns</h1>
+				<h1 class="text-2xl font-semibold text-ink-gray-9">Does this look right?</h1>
 				<p class="mt-2 text-base leading-relaxed text-ink-gray-6">
-					We matched the headings in your file to what ERPNext needs. Check them, change any that are
-					wrong, then continue.
+					We worked out what each of your columns is. Change any we got wrong — then we'll check the
+					rows themselves.
 				</p>
 			</div>
 
@@ -242,8 +245,8 @@
 				<p class="mt-2 text-base leading-relaxed text-ink-gray-6">
 					<template v-if="data.locked">How your data checked out against ERPNext's rules.</template>
 					<template v-else>
-						We checked every row against ERPNext's rules. Fix anything below right here, or correct your
-						file and upload it again. Your original file is never changed.
+						We checked every row against ERPNext's rules. Fix anything below right here, or go back and
+						change what you gave us. Nothing you uploaded is ever altered.
 					</template>
 				</p>
 			</div>
@@ -344,7 +347,7 @@ const uploading = ref(false)
 const progress = ref(0)
 const dragging = ref(false)
 const showColumns = ref(false)
-const mode = ref("file")
+const mode = ref("")
 const typed = ref([])
 const showPreview = ref(false)
 const picker = ref(null)
@@ -364,8 +367,8 @@ const missingColumns = computed(() =>
 const wizard = computed(() => {
 	const up = data.value?.upload
 	return [
-		{ label: "Upload", done: !!up, reachable: true },
-		{ label: "Match columns", done: !!up && !missingColumns.value.length, reachable: !!up },
+		{ label: "Your data", done: !!up, reachable: true },
+		{ label: "Columns", done: !!up && !missingColumns.value.length, reachable: !!up },
 		{ label: "Check", done: !!up && up.errors === 0, reachable: !!up },
 	]
 })
@@ -374,6 +377,11 @@ const fieldOptions = computed(() => [
 	{ label: "Don't use", value: "" },
 	...data.value.columns.map((c) => ({ label: c.label + (c.required ? " *" : ""), value: c.fieldname })),
 ])
+
+const o = computed(() => state.overview)
+const position = computed(
+	() => (o.value?.steps || []).findIndex((s) => s.area === props.area) + 1
+)
 
 const nextStep = computed(() => {
 	const steps = state.overview?.steps || []
@@ -452,7 +460,7 @@ async function saveTyped() {
 	try {
 		data.value = await api("enter_rows", { onboarding: state.id, area: props.area, rows: filled.value })
 		typed.value = []
-		mode.value = "file"
+		mode.value = ""
 		step.value = data.value.upload ? 2 : 0
 		loadOverview()
 	} catch (e) {
