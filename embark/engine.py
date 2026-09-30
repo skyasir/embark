@@ -37,6 +37,8 @@ MAX_ROWS = 20000
 # the customer did not upload it. Everything else, such as Warehouse or Item,
 # must come from the customer's own sheets: records on the onboarding site
 # belong to other companies and prove nothing about theirs.
+# Masters ERPNext ships or creates for itself. A value in one of these is known
+# even on a site whose setup wizard has not run yet.
 REFERENCE_DOCTYPES = {
 	"UOM",
 	"Country",
@@ -48,6 +50,13 @@ REFERENCE_DOCTYPES = {
 	"Warehouse Type",
 	"Gender",
 	"Salutation",
+	"Price List",
+	"Brand",
+	"Item Attribute",
+	"Payment Terms Template",
+	"Sales Person",
+	"Stock Entry Type",
+	"Workstation Type",
 }
 
 # Title of each issue group on the Check screen, and whether it blocks.
@@ -528,7 +537,10 @@ def _suggest(doctype: str, value: str, pool: dict[str, str]) -> list[str]:
 		if unit:
 			# A known spelling is the answer; fuzzy look-alikes (Kilowatt for Kilo) are noise.
 			return [unit]
-	return get_close_matches(value, list(pool.values()), n=3, cutoff=0.6)
+	# Never offer the value they already typed: "change Standard Selling to
+	# Standard Selling" is what a broken suggestion looks like.
+	folded = value.strip().lower()
+	return [m for m in get_close_matches(value, list(pool.values()), n=4, cutoff=0.6) if m.lower() != folded][:3]
 
 
 def _not_found_hint(doctype: str, close: list[str], pool: dict[str, str], area: str | None) -> str:
