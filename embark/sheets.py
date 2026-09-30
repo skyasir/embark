@@ -7,6 +7,7 @@ import zipfile
 
 import frappe
 from frappe import _
+from frappe.utils import cstr
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
@@ -53,6 +54,23 @@ def template_xlsx(area, answers: dict[str, str] | None = None) -> bytes:
 	for row in guide.iter_rows(min_row=2):
 		row[2].alignment = Alignment(wrap_text=True, vertical="top")
 
+	return _save(wb)
+
+
+def typed_xlsx(area, rows: list[dict], answers: dict[str, str] | None = None) -> bytes:
+	"""A sheet built from rows someone typed in, rather than a file they had.
+
+	The rest of Embark only knows how to read a spreadsheet, so typing a few
+	warehouses in makes one — and every check, fix and export then works on it
+	exactly as it would on a customer's own file.
+	"""
+	columns = build_columns(area, answers or {})
+	wb = Workbook()
+	ws = wb.active
+	ws.title = area.name[:31]
+	ws.append([c.label for c in columns])
+	for row in rows:
+		ws.append([cstr(row.get(c.fieldname, "")).strip() for c in columns])
 	return _save(wb)
 
 

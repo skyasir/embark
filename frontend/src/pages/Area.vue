@@ -59,7 +59,73 @@
 				</div>
 			</div>
 
+			<!-- A handful of rows is quicker typed than exported, so both are here. -->
 			<div v-if="!data.locked" class="space-y-3">
+				<div class="flex gap-2">
+					<Button
+						size="md"
+						:variant="mode === 'file' ? 'subtle' : 'ghost'"
+						icon-left="upload"
+						@click="mode = 'file'"
+					>
+						Upload a file
+					</Button>
+					<Button
+						size="md"
+						:variant="mode === 'type' ? 'subtle' : 'ghost'"
+						icon-left="edit-3"
+						@click="startTyping"
+					>
+						Type them in
+					</Button>
+				</div>
+			</div>
+
+			<div v-if="!data.locked && mode === 'type'" class="space-y-3">
+				<h2 class="text-base font-semibold text-ink-gray-8">Type your {{ data.area.name.toLowerCase() }}</h2>
+				<div class="overflow-x-auto rounded-lg border border-outline-gray-2">
+					<table class="w-full text-left text-base">
+						<thead class="bg-surface-gray-1 text-ink-gray-6">
+							<tr>
+								<th v-for="c in data.columns" :key="c.fieldname" class="px-3 py-2 font-medium">
+									{{ c.label }}<span v-if="c.required" class="text-ink-red-3"> *</span>
+								</th>
+								<th class="w-10 px-2 py-2" />
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-outline-gray-1">
+							<tr v-for="(row, i) in typed" :key="i">
+								<td v-for="c in data.columns" :key="c.fieldname" class="px-1 py-1">
+									<input
+										v-model="row[c.fieldname]"
+										class="w-full rounded border-0 bg-transparent px-2 py-1.5 text-base text-ink-gray-8 placeholder:text-ink-gray-4 focus:bg-surface-gray-1 focus:outline-none"
+										:placeholder="i === 0 ? c.example || '' : ''"
+										@keydown.enter.prevent="addRow(i)"
+									/>
+								</td>
+								<td class="px-1 py-1">
+									<Button
+										v-if="typed.length > 1"
+										variant="ghost"
+										size="sm"
+										icon="x"
+										label="Remove row"
+										@click="typed.splice(i, 1)"
+									/>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<div class="flex items-center justify-between">
+					<Button size="md" variant="ghost" icon-left="plus" @click="addRow()">Add a row</Button>
+					<Button variant="solid" size="md" :loading="busy" :disabled="!hasTyped" @click="saveTyped">
+						Check these {{ filledCount }} {{ filledCount === 1 ? "row" : "rows" }}
+					</Button>
+				</div>
+			</div>
+
+			<div v-if="!data.locked && mode === 'file'" class="space-y-3">
 				<h2 class="text-base font-semibold text-ink-gray-8">Then upload it here</h2>
 				<label
 					class="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-6 py-10 text-center transition-colors"
@@ -235,7 +301,7 @@
 <script setup>
 import { computed, ref, watch } from "vue"
 import { useRouter } from "vue-router"
-import { FeatherIcon, FormControl, LoadingIndicator, toast } from "frappe-ui"
+import { Button, FeatherIcon, FormControl, LoadingIndicator, toast } from "frappe-ui"
 
 import Callout from "../components/Callout.vue"
 import IssueGroup from "../components/IssueGroup.vue"
@@ -256,10 +322,18 @@ const uploading = ref(false)
 const progress = ref(0)
 const dragging = ref(false)
 const showColumns = ref(false)
+const mode = ref("file")
+const typed = ref([])
 const showPreview = ref(false)
 const picker = ref(null)
 
 const previewCount = computed(() => data.value?.upload?.preview.rows.length || 0)
+
+const filled = computed(() =>
+	typed.value.filter((row) => Object.values(row).some((v) => (v || "").toString().trim()))
+)
+const filledCount = computed(() => filled.value.length)
+const hasTyped = computed(() => filledCount.value > 0)
 
 const missingColumns = computed(() =>
 	(data.value?.upload?.groups || []).filter((g) => g.code === "COLUMN_MISSING").map((g) => g.label)
@@ -303,6 +377,34 @@ async function run(method, args, message) {
 	try {
 		data.value = await api(method, { onboarding: state.id, area: props.area, ...args })
 		if (message) toast.success(message)
+		loadOverview()
+	} catch (e) {
+		toast.error(errorText(e))
+	} finally {
+		busy.value = false
+	}
+}
+
+function emptyRow() {
+	return Object.fromEntries((data.value?.columns || []).map((c) => [c.fieldname, ""]))
+}
+
+function startTyping() {
+	mode.value = "type"
+	if (!typed.value.length) typed.value = [emptyRow(), emptyRow(), emptyRow()]
+}
+
+function addRow(after) {
+	typed.value.splice(after === undefined ? typed.value.length : after + 1, 0, emptyRow())
+}
+
+async function saveTyped() {
+	busy.value = true
+	try {
+		data.value = await api("enter_rows", { onboarding: state.id, area: props.area, rows: filled.value })
+		typed.value = []
+		mode.value = "file"
+		step.value = data.value.upload ? 2 : 0
 		loadOverview()
 	} catch (e) {
 		toast.error(errorText(e))

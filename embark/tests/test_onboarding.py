@@ -570,6 +570,32 @@ class TestOnboardingFlow(TestCase):
 		self.assertLessEqual(codes.count("REQUIRED_MISSING"), 1)
 		self.assertLess(up["errors"], 10, up["issues"][:3])
 
+	def test_rows_can_be_typed_instead_of_uploaded(self):
+		"""Three warehouses do not deserve a spreadsheet."""
+		self.answer_interview()
+		area = api.enter_rows(
+			self.onboarding.name,
+			"Warehouses",
+			[
+				{"warehouse_name": "Main Store"},
+				{"warehouse_name": "Godown 2"},
+				{"warehouse_name": ""},  # a blank line is not a row
+			],
+		)
+		up = area["upload"]
+		self.assertEqual(up["rows"], 2)
+		self.assertEqual(up["errors"], 0, up["issues"])
+		self.assertEqual(self.step("Warehouses")["status"], "Ready")
+
+		# It became a real sheet, so everything downstream works on it.
+		self.assertTrue(up["file_name"].endswith(".xlsx"))
+		self.assertEqual({r["warehouse_name"] for r in up["preview"]["rows"]}, {"Main Store", "Godown 2"})
+
+		self.assertRaises(frappe.ValidationError, api.enter_rows, self.onboarding.name, "Warehouses", [])
+		self.assertRaises(
+			frappe.ValidationError, api.enter_rows, self.onboarding.name, "Warehouses", [{}] * 300
+		)
+
 	def test_template_download(self):
 		self.answer_interview()
 		api.download_template("Customers", self.onboarding.name)
