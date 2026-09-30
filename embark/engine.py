@@ -540,7 +540,9 @@ def _suggest(doctype: str, value: str, pool: dict[str, str]) -> list[str]:
 	# Never offer the value they already typed: "change Standard Selling to
 	# Standard Selling" is what a broken suggestion looks like.
 	folded = value.strip().lower()
-	return [m for m in get_close_matches(value, list(pool.values()), n=4, cutoff=0.6) if m.lower() != folded][:3]
+	return [m for m in get_close_matches(value, list(pool.values()), n=4, cutoff=0.6) if m.lower() != folded][
+		:3
+	]
 
 
 def _not_found_hint(doctype: str, close: list[str], pool: dict[str, str], area: str | None) -> str:
