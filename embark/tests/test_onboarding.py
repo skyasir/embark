@@ -346,6 +346,9 @@ class TestOnboardingFlow(TestCase):
 		self.assertIn("Items", steps())
 
 	def test_assistant_is_off_until_a_provider_is_configured(self):
+		# Whatever this site is pointed at, an unconfigured one offers no chat.
+		frappe.db.set_single_value("Embark Settings", {"assistant_enabled": 0, "model": "", "base_url": ""})
+		frappe.clear_cache(doctype="Embark Settings")
 		self.assertFalse(assistant.is_on())
 		self.assertFalse(api.get_overview(self.onboarding.name)["assistant"])
 		self.assertRaises(frappe.ValidationError, api.ask, "hello", self.onboarding.name)
@@ -621,3 +624,60 @@ class TestOnboardingFlow(TestCase):
 		wb = load_workbook(io.BytesIO(frappe.response.filecontent))
 		self.assertEqual(wb.sheetnames[1], "How to fill")
 		self.assertEqual(wb.active["A1"].value, "Customer Name *")
+
+	def test_approving_creates_the_records_in_erpnext(self):
+		"""The point of the whole thing: approved data becomes real records."""
+		if not api.setup_done():
+			self.skipTest("no company on this site yet")
+		self.answer_interview()
+		api.enter_rows(
+			self.onboarding.name,
+			"Warehouses",
+			[{"warehouse_name": "Embark Test Store"}, {"warehouse_name": "Embark Test Godown"}],
+		)
+		self.upload(
+			"Customers",
+			[["Customer Name", "Customer Group"], ["Embark Test Customer", "Commercial"]],
+		)
+		result = api.review(self.onboarding.name, "Approved")
+		summary = result["summary"]
+		self.assertIsNotNone(summary, "approving did not create anything")
+
+		warehouses = next(s for s in summary["steps"] if s["area"] == "Warehouses")
+		self.assertEqual(warehouses["created"], 2, warehouses)
+		self.assertTrue(frappe.db.exists("Warehouse", {"warehouse_name": "Embark Test Store"}))
+		self.assertTrue(frappe.db.exists("Customer", {"customer_name": "Embark Test Customer"}))
+
+		# The company came from the onboarding, not from a guess.
+		self.assertEqual(
+			frappe.db.get_value("Warehouse", {"warehouse_name": "Embark Test Store"}, "company"),
+			summary["company"],
+		)
+
+		# A step nobody filled in is reported, not failed.
+		empty = [s for s in summary["steps"] if s["reason"]]
+		for step in empty:
+			self.assertEqual(step["created"], 0)
+
+		# And it is safe to press twice: the second run creates nothing.
+		again = api.create_in_erpnext(self.onboarding.name)["summary"]
+		self.assertEqual(again["created"], 0, again)
+		self.assertEqual(again["skipped"], 3, again)
+		self.assertEqual(again["failed"], 0, again)
+
+	def test_nothing_is_created_from_a_step_with_errors(self):
+		"""Bad data is never half-imported."""
+		if not api.setup_done():
+			self.skipTest("no company on this site yet")
+		self.answer_interview()
+		self.upload(
+			"Warehouses",
+			# The same store twice: an error, and neither row is guessed at.
+			[["Warehouse Name"], ["Embark Bad Store"], ["Embark Bad Store"]],
+		)
+		frappe.db.set_value("Embark Onboarding", self.onboarding.name, "status", "Submitted")
+		summary = api.create_in_erpnext(self.onboarding.name)["summary"]
+		warehouses = next(s for s in summary["steps"] if s["area"] == "Warehouses")
+		self.assertIn("fix", warehouses["reason"])
+		self.assertEqual(warehouses["created"], 0)
+		self.assertFalse(frappe.db.exists("Warehouse", {"warehouse_name": "Embark Bad Store"}))

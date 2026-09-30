@@ -25,7 +25,14 @@
 			schedule the implementation.
 		</Callout>
 		<Callout v-else-if="o.status === 'Approved'" tone="success">
-			<strong>All set.</strong> Your data has been approved and is ready for the implementation.
+			<template v-if="inErpnext">
+				<strong>You are live.</strong>
+				{{ inErpnext }} {{ inErpnext === 1 ? "record is" : "records are" }} in ERPNext — open the
+				<a href="/app" class="underline">desk</a> to see them.
+			</template>
+			<template v-else>
+				<strong>All set.</strong> Your data has been approved and is ready for the implementation.
+			</template>
 		</Callout>
 
 		<Callout v-if="!planned" tone="info" icon="list">
@@ -148,6 +155,11 @@ import { api, errorText } from "../data/api"
 import { loadOverview, setOverview, state } from "../data/store"
 
 const o = computed(() => state.overview)
+// Rows that are in ERPNext, whether this run put them there or a previous one.
+const inErpnext = computed(() => {
+	const s = o.value?.import_summary
+	return s ? s.created + s.skipped : 0
+})
 const submitting = ref(false)
 const aiOpen = ref(false)
 

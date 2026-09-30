@@ -18,7 +18,7 @@ import frappe
 from frappe import _
 from frappe.utils import cstr, flt, get_fullname, validate_email_address
 
-from embark import assistant, copilot
+from embark import assistant, copilot, importer
 from embark.conditions import applies
 from embark.embark.doctype.embark_onboarding.embark_onboarding import (
 	LOCKED_STATUSES,
@@ -115,6 +115,9 @@ def get_overview(onboarding: str | None = None) -> dict:
 		"can_submit": doc.readiness == 100 and doc.status not in LOCKED_STATUSES,
 		"can_use_desk": _can_use_desk(),
 		"has_data": any(row.rows for row in doc.areas),
+		"setup_done": setup_done(),
+		"imported_at": doc.imported_at,
+		"import_summary": frappe.parse_json(doc.import_log) if doc.import_log else None,
 		"tally": _tally(doc),
 		"assistant": assistant.is_on(),
 		"can_configure_ai": _can_configure_ai(),
@@ -554,6 +557,20 @@ def start_onboarding(client_name: str) -> dict:
 
 
 @frappe.whitelist(methods=["POST"])
+def create_in_erpnext(onboarding: str | None = None) -> dict:
+	"""Turn the collected data into records on this site."""
+	doc = _get_onboarding(onboarding, "write")
+	_require_staff()
+	if not setup_done():
+		frappe.throw(_("Run ERPNext's setup wizard first — there is no company to put these records in."))
+
+	summary = importer.import_all(doc)
+	doc.db_set("imported_at", frappe.utils.now())
+	doc.db_set("import_log", json.dumps(summary, default=str)[:140000])
+	return {"summary": summary, "overview": get_overview(doc.name)}
+
+
+@frappe.whitelist(methods=["POST"])
 def review(onboarding: str, decision: str, notes: str | None = None) -> dict:
 	_require_staff()
 	if decision not in ("Approved", "Returned"):
@@ -564,7 +581,16 @@ def review(onboarding: str, decision: str, notes: str | None = None) -> dict:
 		doc.review_notes = notes
 	doc.save()
 	doc.add_comment("Info", _("{0} by {1}").format(_(decision), get_fullname(frappe.session.user)))
-	return {"status": doc.status}
+
+	# Approving means the data is good, so it goes in — unless ERPNext has not
+	# been set up yet, in which case it waits for the wizard.
+	summary = None
+	if decision == "Approved" and setup_done():
+		summary = importer.import_all(doc)
+		doc.db_set("imported_at", frappe.utils.now())
+		doc.db_set("import_log", json.dumps(summary, default=str)[:140000])
+
+	return {"status": doc.status, "summary": summary, "overview": get_overview(doc.name)}
 
 
 @frappe.whitelist()

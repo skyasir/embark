@@ -31,6 +31,9 @@
   "areas",
   "tasks_section",
   "tasks",
+  "section_import",
+  "imported_at",
+  "import_log",
   "section_review",
   "review_notes"
  ],
@@ -172,6 +175,25 @@
    "fieldtype": "Table",
    "label": "Setup Plan",
    "options": "Embark Onboarding Task",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_import",
+   "fieldtype": "Section Break",
+   "label": "Created in ERPNext",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "imported_at",
+   "fieldtype": "Datetime",
+   "label": "Created At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "import_log",
+   "fieldtype": "Code",
+   "options": "JSON",
+   "label": "What Was Created",
    "read_only": 1
   },
   {
