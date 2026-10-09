@@ -119,8 +119,9 @@ Frappe and ERPNext v15 and v16.
 
 ### License
 
-**AGPL-3.0-or-later.** Embark's own code was MIT and still carries those
-notices, but it now ships Frappe Flow's agent engine under
-`embark/vendor/flow` — see the note there — and that is AGPL, so the app as a
-whole is AGPL. Anyone who runs a modified Embark as a service has to publish
-their changes.
+**AGPL-3.0-or-later**, the whole app, in `license.txt`. Anyone who runs a
+modified Embark as a service has to publish their changes.
+
+The one exception is `embark/vendor/flow`, which is Frappe Flow's agent engine
+carried in with its own copyright notices and `LICENSE.txt` beside it — theirs,
+not ours. See the note in that folder.
