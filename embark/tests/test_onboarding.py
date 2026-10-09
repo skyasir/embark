@@ -114,6 +114,9 @@ class TestOnboardingFlow(TestCase):
 
 	@staticmethod
 	def default_answer(question):
+		if question["key"] == "modules":
+			# The default customer wants the lot, so every step stays in play.
+			return ",".join(c["value"] for c in question["choices"])
 		if question["type"] == "Number":
 			return "1"
 		if question["type"] == "Yes / No":
@@ -681,3 +684,37 @@ class TestOnboardingFlow(TestCase):
 		self.assertIn("fix", warehouses["reason"])
 		self.assertEqual(warehouses["created"], 0)
 		self.assertFalse(frappe.db.exists("Warehouse", {"warehouse_name": "Embark Bad Store"}))
+
+	def test_the_modules_chosen_decide_the_whole_checklist(self):
+		"""The first question is which parts of ERPNext are wanted."""
+		first = api.get_interview(self.onboarding.name)["questions"][0]
+		self.assertEqual(first["key"], "modules")
+
+		# Accounting and HR only: no stock, no selling, no making anything.
+		self.answer_interview(modules="accounts,hr")
+		asked = {q["key"] for q in api.get_interview(self.onboarding.name)["questions"]}
+		self.assertNotIn("keeps_stock", asked)
+		self.assertNotIn("manufactures", asked)
+		self.assertNotIn("sells_on_orders", asked)
+
+		steps = {s["area"] for s in api.get_overview(self.onboarding.name)["steps"]}
+		self.assertIn("Users", steps)
+		self.assertNotIn("Items", steps)
+		self.assertNotIn("Warehouses", steps)
+		self.assertNotIn("Workstations", steps)
+		self.assertNotIn("Sales People", steps)
+
+		plan = {t["key"] for t in api.get_overview(self.onboarding.name)["plan"]}
+		self.assertIn("hr_setup", plan)
+		self.assertIn("accounts_setup", plan)
+		self.assertNotIn("manufacturing", plan)
+
+	def test_choosing_manufacturing_asks_for_the_shop_floor(self):
+		self.answer_interview(modules="stock,manufacturing", manufactures="yes")
+		steps = {s["area"] for s in api.get_overview(self.onboarding.name)["steps"]}
+		self.assertIn("Workstations", steps)
+		self.assertIn("Items", steps)
+		self.assertIn("Warehouses", steps)
+		# Nobody asked for selling, so none of its questions were put.
+		asked = {q["key"] for q in api.get_interview(self.onboarding.name)["questions"]}
+		self.assertNotIn("price_lists", asked)

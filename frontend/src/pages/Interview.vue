@@ -66,7 +66,8 @@
 						"
 					>
 						<FeatherIcon v-if="isChosen(current, choice.value)" name="check" class="size-3" />
-						<template v-else>{{ i + 1 }}</template>
+						<template v-else-if="i < 9">{{ i + 1 }}</template>
+						<span v-else class="size-1 rounded-full bg-ink-gray-4" />
 					</span>
 					<span class="flex-1">{{ choice.label }}</span>
 				</button>
@@ -136,7 +137,9 @@
 			<div class="flex items-center justify-between pt-2">
 				<Button v-if="index > 0" variant="ghost" icon-left="chevron-left" @click="index--">Back</Button>
 				<span v-else />
-				<span class="text-sm text-ink-gray-4">Press 1–9 to choose</span>
+				<span class="text-sm text-ink-gray-4">
+					Press 1–{{ Math.min(optionsFor(current).length, 9) }} to choose
+				</span>
 			</div>
 		</section>
 
