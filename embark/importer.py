@@ -122,7 +122,10 @@ def _create(doctype: str, values: dict, company: str | None, named: str | None =
 	doc.update(DEFAULTS.get(doctype, {}))
 	doc.update(values)
 	for field in company_fields(doctype):
-		if company and not doc.get(field):
+		# The onboarding names the company, and it outranks the site's default
+		# company — a second company on the site must not catch these records.
+		# A company the customer put in their own sheet is left alone.
+		if company and field not in values:
 			doc.set(field, company)
 	if named and _named_by_hand(doctype):
 		doc.name = named
