@@ -13,8 +13,17 @@
 					>
 						<!-- The app mark, inlined: the same artwork as the desk tile. -->
 						<svg viewBox="0 0 54 54" class="size-8 shrink-0" aria-hidden="true">
-							<rect width="54" height="54" rx="15.43" fill="#4F46E5" />
-							<path d="M19 16h16v4.5H24v4.5h9.5v4.5H24v4.5h11V38H19z" fill="#fff" />
+							<defs>
+								<linearGradient id="embarkTile" x1="0" y1="0" x2="1" y2="1">
+									<stop offset="0" stop-color="#6366F1" />
+									<stop offset="1" stop-color="#4338CA" />
+								</linearGradient>
+							</defs>
+							<rect width="54" height="54" rx="15.43" fill="url(#embarkTile)" />
+							<path
+								d="M16.65 15.55a2.9 2.9 0 0 1 2.9-2.9h14.7a2.9 2.9 0 1 1 0 5.8H22.45v6.7h9.5a2.9 2.9 0 1 1 0 5.8h-9.5v6.7h11.8a2.9 2.9 0 1 1 0 5.8H19.55a2.9 2.9 0 0 1-2.9-2.9z"
+								fill="#fff"
+							/>
 						</svg>
 						<template v-if="!collapsed">
 							<div class="min-w-0 flex-1">
