@@ -718,3 +718,154 @@ class TestOnboardingFlow(TestCase):
 		# Nobody asked for selling, so none of its questions were put.
 		asked = {q["key"] for q in api.get_interview(self.onboarding.name)["questions"]}
 		self.assertNotIn("price_lists", asked)
+
+	# ── The chat as a way of doing the work ───────────────────────────────
+
+	def chat_on(self):
+		frappe.db.set_single_value(
+			"Embark Settings",
+			{
+				"assistant_enabled": 1,
+				"provider": "OpenAI compatible",
+				"model": "stub",
+				"base_url": "http://stub.invalid/v1",
+			},
+		)
+		frappe.clear_cache(doctype="Embark Settings")
+
+	@staticmethod
+	def says(text="", calls=None):
+		return {"text": text, "raw": {"role": "assistant"}, "tool_calls": calls or []}
+
+	@staticmethod
+	def call(name, **arguments):
+		return {"id": f"call_{name}", "name": name, "arguments": arguments}
+
+	def test_the_chat_only_offers_the_tools_that_fit_where_you_are(self):
+		"""Twelve choices is how a model goes wrong. It gets the ones that apply."""
+		names = {t["name"] for t in assistant.tools_for(self.onboarding.name)}
+		self.assertIn("open_questions", names)
+		self.assertNotIn("check_step", names, "data tools before the interview is answered")
+		self.assertNotIn("send_for_review", names)
+
+		self.answer_interview()
+		names = {t["name"] for t in assistant.tools_for(self.onboarding.name)}
+		self.assertIn("check_step", names)
+		self.assertIn("fix", names)
+		self.assertNotIn("open_questions", names, "nothing left to ask")
+		# Sending is offered only when there is something to send.
+		self.assertNotIn("send_for_review", names)
+
+	def test_the_chat_checks_a_sheet_and_fixes_it(self):
+		"""The whole point: the work happens in the conversation."""
+		from unittest.mock import patch
+
+		self.chat_on()
+		self.answer_interview(price_lists="yes")
+		self.upload(
+			"Item Prices",
+			[
+				["Item Code", "Price List", "Rate"],
+				["SKU-1", "Standard Selling", "100"],
+				["SKU-2", "Wholesael", "90"],
+			],
+		)
+
+		turns = [
+			self.says(calls=[self.call("check_step", area="Item Prices")]),
+			self.says("One price list is spelt wrong. Shall I make it Standard Selling?"),
+		]
+		with patch.object(assistant, "_complete", side_effect=turns):
+			result = api.ask("is my price list alright?", self.onboarding.name)
+
+		self.assertEqual(result["used"], ["check_step"])
+		# What it did is shown in words, never as a tool name.
+		self.assertEqual(result["steps"][0]["label"], "Checked your Item Prices")
+		self.assertFalse(result["steps"][0]["failed"])
+		before = self.step("Item Prices")["errors"]
+
+		turns = [
+			self.says(
+				calls=[
+					self.call(
+						"fix",
+						area="Item Prices",
+						column="price_list",
+						old_value="Wholesael",
+						value="Standard Selling",
+					)
+				]
+			),
+			self.says("Fixed."),
+		]
+		with patch.object(assistant, "_complete", side_effect=turns):
+			result = api.ask("yes please", self.onboarding.name)
+
+		# The misspelt price list is gone; the unknown item codes are not its
+		# business, and are still there to be dealt with on their own step.
+		self.assertEqual(self.step("Item Prices")["errors"], before - 1, result["steps"])
+		issues = api.get_area(self.onboarding.name, "Item Prices")["upload"]["issues"]
+		self.assertNotIn("Wholesael", [i["value"] for i in issues])
+		self.assertIn("Standard Selling", result["steps"][0]["label"])
+
+	def test_the_chat_cannot_reach_a_step_that_is_not_yours(self):
+		self.chat_on()
+		self.answer_interview()
+		result = assistant._run_tool(self.onboarding.name, "check_step", {"area": "Not A Step"})
+		self.assertIn("error", result)
+
+	def test_what_the_customer_said_is_written_down_even_if_the_model_forgets(self):
+		"""A model that asks well and saves nothing leaves them repeating themselves."""
+		from unittest.mock import patch
+
+		self.chat_on()
+		turns = [
+			# It answers in words and never calls save_answers…
+			self.says("Right, no stock. What do you use today?"),
+			# …so the catch-up reads the same sentence, on its own, as JSON.
+			self.says('{"keeps_stock": "no"}'),
+		]
+		with patch.object(assistant, "_complete", side_effect=turns):
+			result = api.ask("we hold no stock at all", self.onboarding.name)
+
+		self.assertIn("save_answers", result["used"])
+		self.assertEqual(self.onboarding.reload().answer_map()["keeps_stock"], "no")
+
+	def test_the_catch_up_saves_only_real_answers(self):
+		"""Whatever the model returns, only a real choice of a real question is kept."""
+		open_now = [
+			{
+				"key": "keeps_stock",
+				"question": "?",
+				"type": "Yes / No",
+				"choices": ["yes", "no"],
+				"allow_not_sure": True,
+			},
+			{
+				"key": "business_type",
+				"question": "?",
+				"type": "Several choices",
+				"choices": ["trading", "retail"],
+				"allow_not_sure": True,
+			},
+		]
+		self.assertEqual(
+			assistant._real_answers(
+				{
+					"keeps_stock": "yes",
+					"business_type": "trading,retail,banking",
+					"made_up_question": "yes",
+					"keeps_stock_extra": "yes",
+				},
+				open_now,
+			),
+			{"keeps_stock": "yes", "business_type": "trading,retail"},
+		)
+
+	def test_a_file_sent_in_the_chat_lands_on_the_right_step(self):
+		self.answer_interview()
+		steps = [s["area"] for s in api.get_overview(self.onboarding.name)["steps"]]
+		self.assertEqual(assistant._best_step("customer list final.xlsx", steps), "Customers")
+		self.assertEqual(assistant._best_step("our-warehouses.xlsx", steps), "Warehouses")
+		# A name that says nothing is not guessed at: the chat asks instead.
+		self.assertIsNone(assistant._best_step("book1.xlsx", steps))

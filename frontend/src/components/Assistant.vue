@@ -13,12 +13,9 @@
 
 			<div ref="scroller" class="flex-1 space-y-3 overflow-y-auto px-4 py-4">
 				<div v-if="!messages.length" class="space-y-3">
-					<p class="text-base leading-relaxed text-ink-gray-6">
-						Tell me about your business in your own words and I'll fill in the questions for you.
-						You can always answer them yourself instead.
-					</p>
+					<p class="text-base leading-relaxed text-ink-gray-8">{{ opening.greeting }}</p>
 					<button
-						v-for="example in EXAMPLES"
+						v-for="example in opening.suggestions"
 						:key="example"
 						class="block w-full rounded-lg border border-outline-gray-2 px-3 py-2 text-left text-base text-ink-gray-7 hover:bg-surface-gray-1"
 						@click="send(example)"
@@ -35,10 +32,12 @@
 					<!-- What it did on the way: one row per tool call, openable. -->
 					<details v-else-if="m.role === 'step'" class="rounded-lg border border-outline-gray-2">
 						<summary class="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm text-ink-gray-7">
-							<span class="flex-1 truncate font-mono">{{ m.step.tool }}</span>
-							<span :class="m.step.failed ? 'text-ink-red-3' : 'text-ink-gray-4'">
-								{{ m.step.failed ? "Failed" : "Done" }}
-							</span>
+							<FeatherIcon
+								:name="m.step.failed ? 'alert-circle' : 'check'"
+								class="size-3.5 shrink-0"
+								:class="m.step.failed ? 'text-ink-red-3' : 'text-ink-green-3'"
+							/>
+							<span class="flex-1 truncate">{{ m.step.label || m.step.tool }}</span>
 						</summary>
 						<pre class="overflow-x-auto whitespace-pre-wrap border-t border-outline-gray-1 px-3 py-2 text-sm text-ink-gray-6">{{ detail(m.step) }}</pre>
 					</details>
@@ -96,23 +95,51 @@
 					class="rounded-xl border bg-surface-white px-3 pb-2 pt-2.5 transition-colors"
 					:class="focused ? 'border-outline-gray-3' : 'border-outline-gray-2'"
 				>
+					<!-- A file picked here is sent with the next message, so the
+					     chat can put it on the right step and check it at once. -->
+					<div
+						v-if="attachment"
+						class="mb-2 flex items-center gap-2 rounded-lg bg-surface-gray-2 px-2.5 py-1.5 text-sm text-ink-gray-7"
+					>
+						<FeatherIcon name="paperclip" class="size-3.5 shrink-0 text-ink-gray-5" />
+						<span class="min-w-0 flex-1 truncate">{{ attachment.file_name }}</span>
+						<button class="shrink-0 text-ink-gray-5 hover:text-ink-gray-8" aria-label="Remove" @click="attachment = null">
+							<FeatherIcon name="x" class="size-3.5" />
+						</button>
+					</div>
 					<textarea
 						v-model="draft"
 						rows="2"
 						class="block w-full resize-none border-0 bg-transparent p-0 text-base leading-relaxed text-ink-gray-8 placeholder:text-ink-gray-4 focus:outline-none focus:ring-0"
-						placeholder="We sell tiles wholesale from 3 godowns…"
-						:disabled="busy"
+						:placeholder="o.locked ? 'Your data is with your consultant.' : 'Tell me about your business, or send me a spreadsheet…'"
+						:disabled="busy || o.locked"
 						@focus="focused = true"
 						@blur="focused = false"
 						@keydown.enter.exact.prevent="send(draft)"
 					/>
 					<div class="mt-1.5 flex items-center gap-2">
+						<button
+							class="flex size-7 shrink-0 items-center justify-center rounded-full text-ink-gray-6 transition-colors hover:bg-surface-gray-2 disabled:opacity-40"
+							:disabled="busy || uploading || o.locked"
+							aria-label="Attach a spreadsheet"
+							@click="picker.click()"
+						>
+							<LoadingIndicator v-if="uploading" class="size-4" />
+							<FeatherIcon v-else name="paperclip" class="size-4" />
+						</button>
+						<input
+							ref="picker"
+							type="file"
+							class="hidden"
+							accept=".xlsx,.xls,.csv"
+							@change="onPick"
+						/>
 						<span class="min-w-0 flex-1 truncate text-sm text-ink-gray-4">
 							{{ o.assistant_model || "Embark" }}
 						</span>
 						<button
 							class="flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-gray-3 text-ink-gray-8 transition-colors hover:bg-surface-gray-4 disabled:opacity-40"
-							:disabled="busy || !draft.trim()"
+							:disabled="busy || o.locked || (!draft.trim() && !attachment)"
 							aria-label="Send"
 							@click="send(draft)"
 						>
@@ -126,29 +153,44 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref } from "vue"
+import { computed, nextTick, ref, watch } from "vue"
 import { Badge, Button, FeatherIcon, LoadingIndicator, toast } from "frappe-ui"
 
-import { api, callMethod, errorText } from "../data/api"
+import { api, callMethod, errorText, uploadFile } from "../data/api"
 import { setOverview, state } from "../data/store"
-
-const EXAMPLES = [
-	"We sell auto parts wholesale from two godowns.",
-	"We make furniture to order and buy the timber in.",
-	"We're a services firm — no stock at all.",
-]
 
 const o = computed(() => state.overview)
 const draft = ref("")
 const busy = ref(false)
+const uploading = ref(false)
 const focused = ref(false)
 const messages = ref([])
 const scroller = ref(null)
+const picker = ref(null)
+const attachment = ref(null)
+// What it says before it is spoken to: worked out on the server from where
+// this onboarding actually is, so it costs nothing and is never wrong.
+const opening = ref({ greeting: "", suggestions: [] })
+
+watch(
+	() => state.chatOpen && o.value?.assistant,
+	async (on) => {
+		if (!on || messages.value.length) return
+		try {
+			opening.value = await api("chat_opening", { onboarding: state.id })
+		} catch (e) {
+			opening.value = { greeting: errorText(e), suggestions: [] }
+		}
+	},
+	{ immediate: true },
+)
 
 async function send(text) {
-	const message = (text || "").trim()
+	const sent = attachment.value
+	const message = (text || "").trim() || (sent ? `I have sent you ${sent.file_name}.` : "")
 	if (!message || busy.value) return
 	draft.value = ""
+	attachment.value = null
 	messages.value.push({ role: "user", content: message })
 	busy.value = true
 	await scrollDown()
@@ -158,6 +200,7 @@ async function send(text) {
 			onboarding: state.id,
 			// Only the plain turns: the server rebuilds its own tool context.
 			history: JSON.stringify(said()),
+			file_url: sent?.file_url,
 		})
 		// Everything it did, in the order it did it.
 		;(result.steps || []).forEach((step) => messages.value.push({ role: "step", step }))
@@ -184,6 +227,21 @@ function said() {
 		.filter((m) => (m.role === "user" || m.role === "assistant") && m.content)
 		.slice(-8)
 		.map((m) => ({ role: m.role, content: m.content }))
+}
+
+async function onPick(e) {
+	const file = e.target.files[0]
+	if (!file) return
+	uploading.value = true
+	try {
+		const uploaded = await uploadFile(file, state.id)
+		attachment.value = { file_url: uploaded.file_url, file_name: file.name }
+	} catch (err) {
+		toast.error(errorText(err))
+	} finally {
+		uploading.value = false
+		if (picker.value) picker.value.value = ""
+	}
 }
 
 function detail(step) {

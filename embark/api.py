@@ -165,12 +165,40 @@ def save_ai_settings(
 
 
 @frappe.whitelist()
-def ask(message: str, onboarding: str | None = None, history: str | list | None = None) -> dict:
-	"""One turn of the chat, which can only answer the interview."""
+def ask(
+	message: str,
+	onboarding: str | None = None,
+	history: str | list | None = None,
+	file_url: str | None = None,
+) -> dict:
+	"""One turn of the chat, which drives the same screens the buttons do."""
 	doc = _get_onboarding(onboarding, "write")
 	if _locked(doc):
 		frappe.throw(_("This onboarding has been sent for review."))
-	return assistant.ask(doc.name, message, frappe.parse_json(history) if history else [])
+	if file_url:
+		_own_file(doc, file_url)
+	return assistant.ask(doc.name, message, frappe.parse_json(history) if history else [], file_url=file_url)
+
+
+def _own_file(doc, file_url: str) -> None:
+	"""A file handed to the chat has to be one attached to this onboarding.
+
+	Embark Upload checks the same thing when it reads the file; checking here
+	too means the customer gets a plain refusal instead of the model being
+	handed a path it cannot use.
+	"""
+	if not frappe.db.exists(
+		"File",
+		{"file_url": file_url, "attached_to_doctype": "Embark Onboarding", "attached_to_name": doc.name},
+	):
+		frappe.throw(_("That file does not belong to this onboarding."))
+
+
+@frappe.whitelist()
+def chat_opening(onboarding: str | None = None) -> dict:
+	"""What the chat says before it is spoken to, and what to say back."""
+	doc = _get_onboarding(onboarding)
+	return assistant.opening(doc.name)
 
 
 @frappe.whitelist()
