@@ -75,3 +75,6 @@ frontend/node_modules
 embark/public/frontend
 embark/www/embark.html
 .ruff_cache/
+
+# The root package.json only carries build hooks; its lock file is empty noise.
+/yarn.lock

@@ -1,5 +1,5 @@
-# Copyright (c) 2026, Frappe Technologies and contributors
-# License: MIT. See LICENSE
+# Copyright (c) 2026, Yasir Shaikh and contributors
+# For license information, please see license.txt
 #
 # Vendored into Embark from frappe/flow_client (Flow Provider / Flow Model),
 # renamed so a site may still install Flow itself.
