@@ -118,7 +118,7 @@ AREAS = [
 	{
 		"area_name": "Item Groups",
 		"because": "how you group what you sell",
-		"applies_when": "business_type != services",
+		"applies_when": "business_type != services and modules == stock,selling,buying,manufacturing",
 		"icon": "layers",
 		"required": 0,
 		"target_doctype": "Item Group",
@@ -221,6 +221,7 @@ AREAS = [
 		"because": "you sell to them",
 		"icon": "user-check",
 		"required": 1,
+		"applies_when": "modules == selling,crm,accounts",
 		"target_doctype": "Customer",
 		"key_field": "customer_name",
 		"sequence": 50,
@@ -279,6 +280,7 @@ AREAS = [
 		"because": "you buy from them",
 		"icon": "truck",
 		"required": 1,
+		"applies_when": "modules == buying,accounts",
 		"target_doctype": "Supplier",
 		"key_field": "supplier_name",
 		"sequence": 60,
@@ -468,6 +470,7 @@ AREAS = [
 		"because": "everything you buy, sell or make",
 		"icon": "package",
 		"required": 1,
+		"applies_when": "modules == stock,selling,buying,manufacturing",
 		"target_doctype": "Item",
 		"key_field": "item_code",
 		"sequence": 70,
@@ -557,6 +560,25 @@ CORE_AREAS = [
 # later which ERPNext settings are switched on.
 QUESTIONS = [
 	{
+		"question_key": "modules",
+		"label": "Which parts of ERPNext do you need?",
+		"section_title": "What you do",
+		"sequence": 1,
+		"answer_type": "Several choices",
+		"choices": (
+			"accounts | Accounting — invoices, payments, taxes\n"
+			"selling | Selling — quotations, orders, customers\n"
+			"buying | Buying — purchase orders, suppliers, bills\n"
+			"stock | Stock — items, warehouses, deliveries\n"
+			"manufacturing | Manufacturing — BOMs, work orders, operations\n"
+			"crm | CRM — leads and deals before they become customers\n"
+			"projects | Projects — tasks, timesheets, project costing\n"
+			"hr | HR and Payroll — employees, leave, attendance, salary\n"
+			"assets | Assets — what you own, and its depreciation"
+		),
+		"help_text": "Pick everything you want to run in ERPNext. Everything after this follows from it: the questions you are asked, the data we ask you for, and the setup list.",
+	},
+	{
 		"question_key": "current_system",
 		"label": "What do you use today?",
 		"section_title": "What you do",
@@ -585,19 +607,21 @@ QUESTIONS = [
 		"section_title": "What you do",
 		"sequence": 20,
 		"help_text": "No if you only sell services or order in for each customer.",
+		"applies_when": "modules == stock",
 	},
 	{
 		"question_key": "sells_on_orders",
 		"label": "Do you confirm sales with a quotation or order before invoicing?",
 		"section_title": "Selling",
 		"sequence": 30,
+		"applies_when": "modules == selling",
 	},
 	{
 		"question_key": "delivers_partially",
 		"label": "Do you deliver one order in more than one go?",
 		"section_title": "Selling",
 		"sequence": 40,
-		"applies_when": "keeps_stock == yes",
+		"applies_when": "keeps_stock == yes and modules == selling",
 	},
 	{
 		"question_key": "price_lists",
@@ -605,6 +629,7 @@ QUESTIONS = [
 		"section_title": "Selling",
 		"sequence": 50,
 		"help_text": "For example wholesale and retail rates.",
+		"applies_when": "modules == selling",
 	},
 	{
 		"question_key": "sales_team",
@@ -612,31 +637,35 @@ QUESTIONS = [
 		"section_title": "Selling",
 		"sequence": 55,
 		"help_text": "For commissions, targets, or simply reporting by person.",
+		"applies_when": "modules == selling",
 	},
 	{
 		"question_key": "buys_on_orders",
 		"label": "Do you send purchase orders to your suppliers?",
 		"section_title": "Buying",
 		"sequence": 60,
+		"applies_when": "modules == buying",
 	},
 	{
 		"question_key": "receives_partially",
 		"label": "Do suppliers deliver one order in more than one go?",
 		"section_title": "Buying",
 		"sequence": 70,
-		"applies_when": "keeps_stock == yes",
+		"applies_when": "keeps_stock == yes and modules == buying",
 	},
 	{
 		"question_key": "manufactures",
 		"label": "Do you make or assemble anything yourself?",
 		"section_title": "Making",
 		"sequence": 80,
+		"applies_when": "modules == manufacturing",
 	},
 	{
 		"question_key": "subcontracts",
 		"label": "Does anyone make or finish goods for you?",
 		"section_title": "Making",
 		"sequence": 90,
+		"applies_when": "modules == manufacturing",
 	},
 	{
 		"question_key": "tracks_batches",
@@ -811,6 +840,56 @@ SETUP_TASKS = [
 		"detail": "Tax Categories and Sales/Purchase Taxes and Charges templates.",
 	},
 	{
+		"task_key": "accounts_setup",
+		"title": "Chart of accounts and opening balances",
+		"kind": "Setting",
+		"sequence": 5,
+		"applies_when": "modules == accounts",
+		"because": "you are running your accounting in ERPNext",
+		"description": "Your ledgers, bank accounts and the balances you start with on day one.",
+		"detail": "Chart of Accounts, Cost Centers, Bank Accounts, and opening entries via Journal Entry.",
+	},
+	{
+		"task_key": "crm_pipeline",
+		"title": "Leads and deals",
+		"kind": "Setting",
+		"sequence": 60,
+		"applies_when": "modules == crm",
+		"because": "you asked for CRM",
+		"description": "Enquiries become leads, leads become quotations, and nothing is lost in between.",
+		"detail": "Lead and Opportunity sources, stages and the conversion to Customer.",
+	},
+	{
+		"task_key": "projects_setup",
+		"title": "Projects and timesheets",
+		"kind": "Setting",
+		"sequence": 62,
+		"applies_when": "modules == projects",
+		"because": "you asked for Projects",
+		"description": "Work is tracked per project, with the time and cost that went into it.",
+		"detail": "Project types, task templates, Timesheet and billing against a project.",
+	},
+	{
+		"task_key": "hr_setup",
+		"title": "Employees, leave and payroll",
+		"kind": "Setting",
+		"sequence": 64,
+		"applies_when": "modules == hr",
+		"because": "you asked for HR and Payroll",
+		"description": "Your people, their leave and their salaries, in the same system as the rest.",
+		"detail": "Frappe HR is a separate app and has to be installed on this site first. Then: Employees, Holiday List, Leave Policy, Salary Structure and the first Payroll Entry.",
+	},
+	{
+		"task_key": "assets_setup",
+		"title": "Assets and depreciation",
+		"kind": "Setting",
+		"sequence": 66,
+		"applies_when": "modules == assets",
+		"because": "you asked for Assets",
+		"description": "What you own, what it is worth now, and the depreciation posted each month.",
+		"detail": "Asset Categories, the asset and depreciation accounts, and existing assets with their accumulated depreciation.",
+	},
+	{
 		"task_key": "costing_method",
 		"title": "How stock is valued",
 		"kind": "Decision",
@@ -915,6 +994,13 @@ def seed():
 	for question in QUESTIONS:
 		if not frappe.db.exists("Embark Question", question["question_key"]):
 			frappe.get_doc({"doctype": "Embark Question", **question}).insert(ignore_permissions=True)
+		elif question.get("applies_when"):
+			# A question seeded before it had a condition gets it once. Only a
+			# blank is filled, so a consultant's own edit stays.
+			doc = frappe.get_doc("Embark Question", question["question_key"])
+			if not doc.applies_when:
+				doc.applies_when = question["applies_when"]
+				doc.save(ignore_permissions=True)
 
 	for task in SETUP_TASKS:
 		if not frappe.db.exists("Embark Setup Task", task["task_key"]):
