@@ -78,3 +78,6 @@ embark/www/embark.html
 
 # The root package.json only carries build hooks; its lock file is empty noise.
 /yarn.lock
+
+# Launch-film working files and renders.
+brag-output/

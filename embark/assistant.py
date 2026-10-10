@@ -525,6 +525,9 @@ def _answer(onboarding, text, used, steps, pending, request, asked=None) -> dict
 					"failed": False,
 				}
 			)
+			# Say what was written down. Reading between the lines is a guess,
+			# and a guess the customer cannot see is a guess they cannot correct.
+			text = (text or "").rstrip() + "\n\n" + _noted(onboarding, caught)
 
 	change_set = copilot.propose(_title(request), request, pending) if pending else None
 	return {
@@ -534,6 +537,24 @@ def _answer(onboarding, text, used, steps, pending, request, asked=None) -> dict
 		"change_set": change_set,
 		"overview": api.get_overview(onboarding),
 	}
+
+
+def _noted(onboarding: str, caught: dict) -> str:
+	"""The answers just taken from what they said, in their own words."""
+	from embark import api
+
+	by_key = {q["key"]: q for q in api.get_interview(onboarding)["questions"]}
+	lines = []
+	for key, value in caught.items():
+		question = by_key.get(key)
+		if not question:
+			continue
+		labels = {c["value"]: c["label"] for c in question["choices"]}
+		said = ", ".join(labels.get(v, v) for v in value.split(","))
+		lines.append(f"· {question['label']} {said}")
+	if not lines:
+		return ""
+	return _("I have put you down for this — tell me if any of it is wrong:") + "\n" + "\n".join(lines)
 
 
 def _catch_up(onboarding: str, said: str, asked: str | None) -> dict:
@@ -575,8 +596,11 @@ def _catch_up(onboarding: str, said: str, asked: str | None) -> dict:
 		+ f'The customer replied: "{said}"\n\n'
 		"Which of those questions does that reply answer? Answer with JSON only, no other words: "
 		'{"<question key>": "<one of its choices>"}. Several choices for one question are comma '
-		"separated. Include a question only if the reply states its answer outright — leave out "
-		"anything you would be guessing at. If it answers none of them, return {}."
+		"separated, and only for choices the reply actually names.\n"
+		"Be strict. Include a question only if the reply says its answer outright. Do not work it "
+		"out from the kind of business they are, do not fill in what is likely, and do not answer a "
+		"question the reply does not mention at all. Leaving a question out is always safe; "
+		"inventing an answer is not. If it answers none of them, return {}."
 	)
 	try:
 		reply = _complete([{"role": "user", "content": prompt}], tools=[])
