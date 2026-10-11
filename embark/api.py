@@ -18,7 +18,7 @@ import frappe
 from frappe import _
 from frappe.utils import cstr, flt, get_fullname, validate_email_address
 
-from embark import assistant, copilot, importer
+from embark import assistant, configure, copilot, importer
 from embark.conditions import applies
 from embark.embark.doctype.embark_onboarding.embark_onboarding import (
 	LOCKED_STATUSES,
@@ -598,6 +598,46 @@ def create_in_erpnext(onboarding: str | None = None) -> dict:
 	return {"summary": summary, "overview": get_overview(doc.name)}
 
 
+@frappe.whitelist()
+def configure_preview(onboarding: str, task: str) -> dict:
+	"""What one line of the plan would change in ERPNext, before it is written."""
+	copilot._studio_user()
+	doc = _get_onboarding(onboarding)
+	return {"task": task, "changes": configure.preview(doc, task)}
+
+
+@frappe.whitelist(methods=["POST"])
+def configure_step(onboarding: str, task: str) -> dict:
+	"""Write one line of the plan to this site."""
+	copilot._studio_user()
+	doc = _get_onboarding(onboarding, "write")
+	result = configure.apply(doc, task)
+	return {"result": result, "overview": get_overview(doc.name)}
+
+
+@frappe.whitelist(methods=["POST"])
+def configure_all(onboarding: str) -> dict:
+	"""Write every line of the plan Embark can do itself, in plan order."""
+	copilot._studio_user()
+	doc = _get_onboarding(onboarding, "write")
+	done, already, failed = [], [], []
+	for row in doc.tasks:
+		if row.status == "Skipped" or not configure.can_apply(row.setup_task):
+			continue
+		try:
+			result = configure.apply(doc, row.setup_task)
+			(already if result["already"] else done).append(row.title)
+		except Exception as e:
+			failed.append({"task": row.title, "why": frappe.utils.strip_html(str(e))[:200]})
+			frappe.clear_messages()
+	return {
+		"configured": done,
+		"already": already,
+		"failed": failed,
+		"overview": get_overview(doc.name),
+	}
+
+
 @frappe.whitelist(methods=["POST"])
 def review(onboarding: str, decision: str, notes: str | None = None) -> dict:
 	_require_staff()
@@ -702,6 +742,9 @@ def _plan(doc) -> list[dict]:
 			"status": row.status,
 			"description": library.get(row.setup_task, {}).get("description"),
 			"detail": library.get(row.setup_task, {}).get("detail") if staff else None,
+			# A line Embark can write to the site itself, rather than ask for.
+			"can_apply": staff and configure.can_apply(row.setup_task),
+			"notes": row.notes if staff else None,
 		}
 		for row in doc.tasks
 	]
