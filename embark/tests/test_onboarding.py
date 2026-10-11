@@ -869,3 +869,72 @@ class TestOnboardingFlow(TestCase):
 		self.assertEqual(assistant._best_step("our-warehouses.xlsx", steps), "Warehouses")
 		# A name that says nothing is not guessed at: the chat asks instead.
 		self.assertIsNone(assistant._best_step("book1.xlsx", steps))
+
+	# ── Configuring ERPNext from the plan ─────────────────────────────────
+
+	def test_the_plan_configures_erpnext_itself(self):
+		"""The point of the tool: the setting is written, not written down."""
+		self.answer_interview()
+		before = frappe.db.get_single_value("Selling Settings", "so_required")
+		frappe.db.set_single_value("Selling Settings", "so_required", "No")
+		frappe.clear_cache(doctype="Selling Settings")
+
+		shown = api.configure_preview(self.onboarding.name, "sales_flow")["changes"]
+		self.assertEqual(shown[0]["doctype"], "Selling Settings")
+		self.assertEqual(shown[0]["lines"][0]["before"], "No")
+		self.assertEqual(shown[0]["lines"][0]["after"], "Yes")
+
+		out = api.configure_step(self.onboarding.name, "sales_flow")["result"]
+		self.assertFalse(out["already"])
+		self.assertEqual(frappe.db.get_single_value("Selling Settings", "so_required"), "Yes")
+
+		# The line is marked done, and says what did it.
+		line = next(t for t in api.get_overview(self.onboarding.name)["plan"] if t["key"] == "sales_flow")
+		self.assertEqual(line["status"], "Done")
+		self.assertIn("Embark", line["notes"])
+
+		# It is undoable, because it went through the same change set Studio uses.
+		self.assertTrue(frappe.db.exists("Embark Change Set", out["change_set"]))
+		frappe.get_doc("Embark Change Set", out["change_set"]).undo()
+		self.assertEqual(frappe.db.get_single_value("Selling Settings", "so_required"), "No")
+		frappe.db.set_single_value("Selling Settings", "so_required", before)
+
+	def test_applying_a_second_time_changes_nothing(self):
+		self.answer_interview()
+		frappe.db.set_single_value("Selling Settings", "so_required", "Yes")
+		frappe.clear_cache(doctype="Selling Settings")
+		out = api.configure_step(self.onboarding.name, "sales_flow")["result"]
+		self.assertTrue(out["already"], out)
+		self.assertIsNone(out["change_set"])
+
+	def test_configure_all_does_every_line_it_can(self):
+		from embark import configure
+
+		self.answer_interview()
+		out = api.configure_all(self.onboarding.name)
+		self.assertEqual(out["failed"], [])
+		self.assertTrue(out["configured"] or out["already"])
+
+		# Every line Embark claims it can do is now done; the rest stay for a person.
+		plan = api.get_overview(self.onboarding.name)["plan"]
+		for line in plan:
+			if configure.can_apply(line["key"]):
+				self.assertEqual(line["status"], "Done", line["key"])
+
+		# And the switches really moved.
+		self.assertEqual(frappe.db.get_single_value("Buying Settings", "po_required"), "Yes")
+		self.assertEqual(
+			frappe.db.get_single_value("Stock Settings", "enable_serial_and_batch_no_for_item"), 1
+		)
+
+	def test_a_line_with_no_recipe_is_left_for_a_person(self):
+		from embark import configure
+
+		self.assertFalse(configure.can_apply("document_numbering"))
+		self.assertFalse(configure.can_apply("training_selling"))
+		self.answer_interview()
+		line = next(
+			t for t in api.get_overview(self.onboarding.name)["plan"] if t["key"] == "document_numbering"
+		)
+		self.assertFalse(line["can_apply"])
+		self.assertEqual(line["status"], "Planned")

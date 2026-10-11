@@ -8,9 +8,10 @@ before.
 
 Two rules keep it honest:
 
-* Only the doctypes in ``ALLOWED`` can be touched. They are the customisation
-  layer — fields, properties, scripts, reports, workflows — never a customer's
-  invoices or stock.
+* Only the doctypes in ``ALLOWED`` can be touched: the customisation layer —
+  fields, properties, scripts, reports, workflows — and the settings that decide
+  how ERPNext behaves, which is what Embark configures from the plan. Never a
+  customer's invoices, stock or ledgers.
 * Nothing is applied twice, and nothing is undone twice: the status says which
   state the set is in, and the undo restores from the snapshot taken at apply
   time, not from whatever the model thinks it did.
@@ -22,8 +23,22 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 
-# The customisation layer, and nothing else. Business data is never in reach.
+# How the site is set up, and nothing else. Business data is never in reach.
+#
+# Two kinds of record qualify. The customisation layer is what Studio composes.
+# The settings singles are what a standard implementation *is* — Embark works
+# out which ones the business needs from the interview, and writing them is the
+# whole point of the plan. A Price List is here because an item price cannot be
+# imported onto a list that does not exist; the rates on it stay the customer's.
 ALLOWED = (
+	# The settings a standard implementation configures
+	"Selling Settings",
+	"Buying Settings",
+	"Stock Settings",
+	"Manufacturing Settings",
+	"Accounts Settings",
+	"Price List",
+	# The customisation layer
 	"Custom Field",
 	"Property Setter",
 	"Client Script",
@@ -40,12 +55,17 @@ ALLOWED = (
 )
 
 
+# A snapshot is a whole record. These columns belong to the row, not to what
+# the change did, and writing them back breaks the save.
+SNAPSHOT_SKIP = ("name", "doctype", "creation", "owner", "modified", "modified_by", "idx")
+
+
 class EmbarkChangeSet(Document):
 	def validate(self):
 		for row in self.changes:
 			if row.ref_doctype not in ALLOWED:
 				frappe.throw(
-					_("Embark Studio does not change {0}. It only changes customisations.").format(
+					_("Embark does not change {0}. It only changes how the site is set up.").format(
 						frappe.bold(row.ref_doctype)
 					)
 				)
@@ -130,6 +150,10 @@ def _write(row) -> None:
 		row.ref_name = doc.name
 		return
 
+	# Two lines of a plan can land on the same settings record, and the first
+	# write leaves a stale copy in the document cache. Loading that copy and
+	# saving it is a timestamp clash, so the cache is dropped first.
+	frappe.clear_document_cache(row.ref_doctype, row.ref_name)
 	doc = frappe.get_doc(row.ref_doctype, row.ref_name)
 	if row.action == "Delete":
 		doc.delete(ignore_permissions=True)
@@ -153,6 +177,10 @@ def _restore(row) -> None:
 		frappe.get_doc(before).insert(ignore_permissions=True, set_name=row.ref_name)
 		return
 
+	frappe.clear_document_cache(row.ref_doctype, row.ref_name)
 	doc = frappe.get_doc(row.ref_doctype, row.ref_name)
-	doc.update({k: v for k, v in before.items() if k not in ("name", "doctype", "creation", "owner")})
+	# Everything the snapshot holds except its identity and its own bookkeeping:
+	# putting the old `modified` back makes the save look stale to Frappe and it
+	# refuses the write.
+	doc.update({k: v for k, v in before.items() if k not in SNAPSHOT_SKIP})
 	doc.save(ignore_permissions=True)
