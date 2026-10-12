@@ -47,18 +47,18 @@
 			<nav class="flex-1 space-y-0.5 overflow-y-auto px-2 py-2">
 				<NavLink :to="{ name: 'home' }" icon="home" label="Overview" :collapsed="collapsed" />
 				<NavLink
-					:to="{ name: 'interview' }"
-					icon="message-square"
-					label="About your business"
-					:collapsed="collapsed"
-					:dot="overview.interview.done ? 'Ready' : overview.interview.answered ? 'In Progress' : 'Not Started'"
-				/>
-				<NavLink
 					:to="{ name: 'company' }"
 					icon="briefcase"
 					label="Company details"
 					:collapsed="collapsed"
 					:dot="overview.company_complete ? 'Ready' : 'Not Started'"
+				/>
+				<NavLink
+					:to="{ name: 'interview' }"
+					icon="message-square"
+					label="About your business"
+					:collapsed="collapsed"
+					:dot="overview.interview.done ? 'Ready' : overview.interview.answered ? 'In Progress' : 'Not Started'"
 				/>
 				<!-- The data steps are not fixed navigation: they are the plan the
 				     interview produced, so they live on the Embark page itself. -->
