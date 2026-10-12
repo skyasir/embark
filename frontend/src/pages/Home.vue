@@ -62,13 +62,6 @@
 
 		<ol class="divide-y divide-outline-gray-1 overflow-hidden rounded-lg border border-outline-gray-2">
 			<StepRow
-				icon="message-square"
-				title="Tell us about your business"
-				:description="`What you do, so we only ask for what matters. ${o.interview.answered} of ${o.interview.total} answered.`"
-				:to="{ name: 'interview' }"
-				:status="interviewStatus"
-			/>
-			<StepRow
 				icon="briefcase"
 				title="Company details"
 				:description="
@@ -78,6 +71,13 @@
 				"
 				:to="{ name: 'company' }"
 				:status="o.company_complete ? 'Ready' : 'Not Started'"
+			/>
+			<StepRow
+				icon="message-square"
+				title="Tell us about your business"
+				:description="`What you do, so we only ask for what matters. ${o.interview.answered} of ${o.interview.total} answered.`"
+				:to="{ name: 'interview' }"
+				:status="interviewStatus"
 			/>
 			<StepRow
 				v-for="step in o.steps"
@@ -120,6 +120,9 @@
 				<template v-if="o.status === 'Submitted'">The data has been sent for review.</template>
 				<template v-else-if="o.status === 'Approved'">The data has been approved.</template>
 				<template v-else-if="o.can_submit">Everything required is ready.</template>
+				<template v-else-if="!o.company_complete">
+					Start with your company details, then the questions.
+				</template>
 				<template v-else-if="!planned">Answer the questions first, then we'll know what to ask you for.</template>
 				<template v-else>Finish every required step to send your data for review.</template>
 			</p>

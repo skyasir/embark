@@ -36,7 +36,9 @@ SYSTEM_PROMPT = """You are Embark's assistant. Embark gets a business's data rea
 
 Call where_am_i before your first reply in a conversation. Always. It tells you what is done, what is next and what is wrong, so you can lead instead of asking them what they want.
 
-While the interview is unanswered:
+The company details come first — the name, country, currency and financial year. If where_am_i says they are missing, ask for them before anything else; they are filled in on the Company details screen, not by you.
+
+Then, while the interview is unanswered:
 1. Call open_questions.
 2. If what they just told you answers any of them, call save_answers with those answers in the same turn. Do this before you ask anything else.
 3. Then ask at most two of the remaining questions, in plain language, the way they are written.
@@ -346,6 +348,12 @@ def opening(onboarding: str) -> dict:
 		# Nothing here can change, and ask() refuses a locked onboarding, so the
 		# chat says so rather than inviting a question it cannot answer.
 		greeting = _("Your data is with your consultant now, so there is nothing left for us to change here.")
+	elif not o["company_complete"]:
+		greeting = _(
+			"Hello. I am Embark, and I will get {0} ready for ERPNext with you. "
+			"Start with the company details — the name, country, currency and financial year — "
+			"and then tell me what the business does."
+		).format(o["client_name"])
 	elif nothing_yet:
 		greeting = _(
 			"Hello. I am Embark, and I will get {0} ready for ERPNext with you. "
@@ -369,6 +377,8 @@ def _suggestions(o: dict, nothing_yet: bool) -> list[str]:
 		]
 
 	out = []
+	if not o["company_complete"]:
+		out.append(_("What company details do you need?"))
 	if not o["interview"]["done"]:
 		out.append(_("Ask me the rest of the questions"))
 	broken = [s for s in o["steps"] if s["errors"]]
@@ -850,12 +860,14 @@ def _next_thing(o: dict) -> str:
 	"""The one thing worth doing now, in the words the chat should use."""
 	if o["locked"]:
 		return _("Nothing: the data has been sent to the consultant.")
+	# The company comes first: it is who the onboarding is for, and everything
+	# after it is set up in that company's name.
+	if not o["company_complete"]:
+		return _("Fill in the company details — the name, country, currency and financial year.")
 	if not o["interview"]["done"]:
 		return _("Finish the questions — {0} of {1} answered.").format(
 			o["interview"]["answered"], o["interview"]["total"]
 		)
-	if not o["company_complete"]:
-		return _("Fill in the company details.")
 	broken = [s for s in o["steps"] if s["errors"]]
 	if broken:
 		return _("Fix {0} in {1}.").format(
