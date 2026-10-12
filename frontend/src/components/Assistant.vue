@@ -135,7 +135,8 @@
 							@change="onPick"
 						/>
 						<span class="min-w-0 flex-1 truncate text-sm text-ink-gray-4">
-							{{ o.assistant_model || "Embark" }}
+							{{ o.assistant_model || "Embark"
+							}}<template v-if="o.assistant_engine === 'flow'"> · Frappe Flow</template>
 						</span>
 						<button
 							class="flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-gray-3 text-ink-gray-8 transition-colors hover:bg-surface-gray-4 disabled:opacity-40"

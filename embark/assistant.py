@@ -386,11 +386,20 @@ def _suggestions(o: dict, nothing_yet: bool) -> list[str]:
 def ask(
 	onboarding: str, message: str, history: list[dict] | None = None, file_url: str | None = None
 ) -> dict:
-	"""One turn of the conversation, tools and all."""
-	from embark import api
+	"""One turn of the conversation, tools and all.
+
+	Frappe Flow runs it wherever Flow can run: its tools are typed from their
+	signatures and their arguments are validated before anything executes. The
+	loop below is the fallback for a site without it, and a site pins this one
+	with ``"embark_engine": "embark"``.
+	"""
+	from embark import api, assistant_flow
 
 	if not is_on():
 		frappe.throw(_("The chat assistant is not set up on this site."))
+
+	if assistant_flow.available():
+		return assistant_flow.ask(onboarding, message, history, file_url)
 
 	messages = _conversation(history)
 	asked = next((m["content"] for m in reversed(messages) if m["role"] == "assistant"), None)

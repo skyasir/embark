@@ -5,6 +5,7 @@ bench --site <site> run-tests --module embark.tests.test_onboarding
 
 import io
 import json
+import typing
 import zipfile
 
 import frappe
@@ -99,6 +100,7 @@ class TestOnboardingFlow(TestCase):
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
+		frappe.local.conf.pop("embark_engine", None)
 		frappe.db.rollback()
 
 	def answer_interview(self, **answers):
@@ -381,6 +383,7 @@ class TestOnboardingFlow(TestCase):
 	def test_the_assistant_acts_on_a_written_tool_call(self):
 		from unittest.mock import patch
 
+		frappe.local.conf["embark_engine"] = "embark"
 		frappe.db.set_single_value(
 			"Embark Settings",
 			{
@@ -435,6 +438,7 @@ class TestOnboardingFlow(TestCase):
 	def test_assistant_answers_the_interview_and_nothing_else(self):
 		from unittest.mock import patch
 
+		frappe.local.conf["embark_engine"] = "embark"
 		frappe.db.set_single_value(
 			"Embark Settings",
 			{
@@ -721,7 +725,14 @@ class TestOnboardingFlow(TestCase):
 
 	# ── The chat as a way of doing the work ───────────────────────────────
 
-	def chat_on(self):
+	def chat_on(self, engine="embark"):
+		"""Turn the chat on, pinned to the engine under test.
+
+		Flow is what runs the chat on a real site; these tests exercise Embark's
+		own loop through a stubbed provider, so they say so rather than letting
+		the engine reach for a model that is not there.
+		"""
+		frappe.local.conf["embark_engine"] = engine
 		frappe.db.set_single_value(
 			"Embark Settings",
 			{
@@ -938,3 +949,68 @@ class TestOnboardingFlow(TestCase):
 		)
 		self.assertFalse(line["can_apply"])
 		self.assertEqual(line["status"], "Planned")
+
+	# ── Ask Embark on Frappe Flow ─────────────────────────────────────────
+
+	def test_ask_embark_runs_on_flow_when_it_can(self):
+		"""The chat is the same chat; Flow is what runs it."""
+		from unittest.mock import patch
+
+		from embark import assistant_flow
+
+		self.chat_on()
+		self.answer_interview()
+
+		class Call:
+			name = "where_am_i"
+			arguments: typing.ClassVar[dict] = {}
+			result = '{"customer": "Sunrise Traders"}'
+
+		class Result:
+			output = "You are two steps from done."
+			tool_calls: typing.ClassVar[list] = [Call()]
+
+		class Engine:
+			def __init__(self, **kw):
+				Engine.tools = kw["tools"]
+				Engine.instructions = kw["instructions"]
+
+			def run(self, messages):
+				Engine.messages = messages
+				return Result()
+
+		with (
+			patch.object(assistant_flow, "available", return_value=True),
+			patch.object(assistant_flow, "model", return_value=object()),
+			patch("embark.vendor.flow.Agent", Engine),
+		):
+			out = api.ask("where am I?", self.onboarding.name)
+
+		self.assertEqual(out["engine"], "flow")
+		self.assertEqual(out["reply"], "You are two steps from done.")
+		# What it did is still shown in words, not as a tool name.
+		self.assertEqual(out["steps"][0]["label"], "Checked where you are")
+
+		# Flow was handed typed tools, and only the ones this stage offers.
+		names = {t.name for t in Engine.tools}
+		self.assertIn("check_step", names)
+		self.assertNotIn("open_questions", names, "the interview is answered")
+		# Their schemas come from the function signatures, not a hand-written dict.
+		step = next(t for t in Engine.tools if t.name == "step_help")
+		self.assertIn("area", step.to_dict()["function"]["parameters"]["properties"])
+
+	def test_the_chat_falls_back_when_flow_cannot_run(self):
+		"""A site without litellm keeps its chat, and a site can pin either engine."""
+		from unittest.mock import patch
+
+		from embark import assistant_flow
+
+		self.chat_on(engine="flow")
+
+		# Flow talks to providers through litellm. Without it, Embark's own loop.
+		with patch.dict("sys.modules", {"litellm": None}):
+			self.assertFalse(assistant_flow.available())
+
+		# And whatever is installed, a site can say which engine it wants.
+		frappe.local.conf["embark_engine"] = "embark"
+		self.assertFalse(assistant_flow.available())
