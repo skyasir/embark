@@ -1043,7 +1043,33 @@ def _post(url: str, body: dict, headers: dict) -> dict:
 		return response.json()
 	except requests.RequestException as e:
 		frappe.log_error(f"Embark assistant: {e}", "Embark assistant")
-		frappe.throw(_("The assistant could not be reached. The questions below still work."))
+		frappe.throw(_unreachable(e))
+
+
+def _unreachable(error: Exception) -> str:
+	"""Why the model could not be reached, said usefully to whoever can fix it.
+
+	A customer gets a sentence that tells them the rest still works. Whoever
+	set the provider up gets the provider's own words, because "could not be
+	reached" is the same message whether the key is wrong, the address is wrong
+	or the model name simply does not exist on the other end.
+	"""
+	from embark.permissions import is_staff
+
+	plain = _("The assistant could not be reached. The questions below still work.")
+	if not is_staff():
+		return plain
+
+	doc = settings()
+	reason = frappe.utils.strip_html(str(error))
+	# A provider's 404 body names the model it could not find; that is the whole
+	# answer, and it is lost if only the status code survives.
+	body = getattr(getattr(error, "response", None), "text", "") or ""
+	if body and body[:400] not in reason:
+		reason = f"{reason} — {body[:400]}"
+	return _("{0}\n\n{1} at {2} said: {3}").format(
+		plain, doc.model or _("the model"), doc.base_url or doc.provider, reason[:500]
+	)
 
 
 def _loads(raw) -> dict:

@@ -7,6 +7,7 @@ import io
 import json
 import typing
 import zipfile
+from unittest.mock import patch
 
 import frappe
 from openpyxl import Workbook, load_workbook
@@ -1014,3 +1015,33 @@ class TestOnboardingFlow(TestCase):
 		# And whatever is installed, a site can say which engine it wants.
 		frappe.local.conf["embark_engine"] = "embark"
 		self.assertFalse(assistant_flow.available())
+
+	def test_a_provider_that_cannot_be_reached_says_why(self):
+		"""'Could not be reached' is the same message for a wrong key, a wrong
+		address and a model that does not exist. Whoever set it up needs the
+		difference; the customer does not."""
+		import requests
+
+		self.chat_on()
+		frappe.db.set_single_value(
+			"Embark Settings", {"model": "ghost-model", "base_url": "http://nowhere.invalid/v1"}
+		)
+		frappe.clear_cache(doctype="Embark Settings")
+
+		class Response:
+			text = '{"error": "model \'ghost-model\' not found"}'
+
+		failure = requests.RequestException("404 Client Error")
+		failure.response = Response()
+
+		said = assistant._unreachable(failure)
+		self.assertIn("still work", said)
+		self.assertIn("ghost-model", said, "staff are told which model")
+		self.assertIn("nowhere.invalid", said, "and where it was asked")
+		self.assertIn("not found", said, "and what the provider itself said")
+
+		# The customer gets the plain sentence and nothing to puzzle over.
+		with patch("embark.permissions.is_staff", return_value=False):
+			plain = assistant._unreachable(failure)
+		self.assertNotIn("ghost-model", plain)
+		self.assertNotIn("nowhere.invalid", plain)

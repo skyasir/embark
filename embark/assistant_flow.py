@@ -99,6 +99,11 @@ def ask(
 	except RuntimeError:
 		# The engine gave up going round. Whatever it did still counts.
 		circled = True
+	except Exception as e:
+		# The provider refused or could not be reached. Say which, the same way
+		# the other engine does — a bare traceback helps nobody.
+		frappe.log_error(f"Ask Embark on Flow: {e}", "Embark assistant")
+		frappe.throw(assistant._unreachable(e))
 
 	steps = _steps(result)
 	used = [step["tool"] for step in steps]
