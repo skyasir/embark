@@ -122,8 +122,16 @@ def get_overview(onboarding: str | None = None) -> dict:
 		"assistant": assistant.is_on(),
 		"can_configure_ai": _can_configure_ai(),
 		"assistant_model": assistant.model_name(),
+		"assistant_engine": _engine(),
 		"user": {"name": frappe.session.user, "full_name": get_fullname(frappe.session.user)},
 	}
+
+
+def _engine() -> str:
+	"""Which engine answers here: Frappe Flow, or Embark's own loop."""
+	from embark import assistant_flow
+
+	return "flow" if assistant_flow.available() else "embark"
 
 
 @frappe.whitelist()
