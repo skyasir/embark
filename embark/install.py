@@ -691,6 +691,16 @@ QUESTIONS = [
 		"allow_not_sure": 0,
 	},
 	{
+		"question_key": "tax_rates",
+		"label": "Which tax rates do you charge?",
+		"section_title": "Money",
+		"sequence": 145,
+		"answer_type": "Several choices",
+		"applies_when": "tax_registered == yes",
+		"choices": "0 | 0% — exempt or zero rated\n5 | 5%\n12 | 12%\n18 | 18%\n28 | 28%",
+		"help_text": "Pick every rate that appears on your invoices. Each one becomes a ready-made tax template you can pick on an invoice, and a tax group you can put on an item.",
+	},
+	{
 		"question_key": "multi_currency",
 		"label": "Do you buy or sell in another currency?",
 		"section_title": "Money",
