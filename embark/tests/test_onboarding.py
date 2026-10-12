@@ -1056,7 +1056,17 @@ class TestOnboardingFlow(TestCase):
 		self.upload(
 			"Customers",
 			[
-				["Customer Name", "Tax ID", "Contact", "Email", "Mobile", "Address", "City", "State", "PIN / Postal Code"],
+				[
+					"Customer Name",
+					"Tax ID",
+					"Contact",
+					"Email",
+					"Mobile",
+					"Address",
+					"City",
+					"State",
+					"PIN / Postal Code",
+				],
 				[
 					"Northwind Traders",
 					"27AAACS1234A1Z5",
@@ -1116,3 +1126,49 @@ class TestOnboardingFlow(TestCase):
 		self.assertEqual(step["created"], 1)
 		self.assertEqual(step["also"], {})
 		self.assertTrue(frappe.db.exists("Customer", "Bare Name Only"))
+
+	def test_the_tax_rates_they_charge_become_real_templates(self):
+		"""ERPNext ships no tax templates. Without them nobody can raise a
+		correct invoice, so a standard implementation is not done until they
+		exist."""
+		if not api.setup_done():
+			self.skipTest("no company on this site yet")
+		self.answer_interview(tax_registered="yes", tax_rates="18")
+		company = frappe.get_all("Company", pluck="name", order_by="creation asc")[0]
+
+		shown = api.configure_preview(self.onboarding.name, "tax_setup")["changes"]
+		self.assertTrue(shown, "nothing planned for the rate they charge")
+
+		api.configure_step(self.onboarding.name, "tax_setup")
+
+		abbr = frappe.db.get_value("Company", company, "abbr")
+		for side in ("Output", "Input"):
+			account = f"{side} Tax 18% - {abbr}"
+			self.assertTrue(frappe.db.exists("Account", account), account)
+			self.assertEqual(frappe.db.get_value("Account", account, "account_type"), "Tax")
+
+		for doctype, head in (
+			("Sales Taxes and Charges Template", f"Output Tax 18% - {abbr}"),
+			("Purchase Taxes and Charges Template", f"Input Tax 18% - {abbr}"),
+		):
+			name = frappe.db.get_value(doctype, {"title": "Tax 18%", "company": company})
+			self.assertTrue(name, doctype)
+			row = frappe.get_doc(doctype, name).taxes[0]
+			self.assertEqual((row.account_head, row.rate, row.charge_type), (head, 18.0, "On Net Total"))
+
+		item_tax = frappe.db.get_value("Item Tax Template", {"title": "Tax 18%", "company": company})
+		self.assertTrue(item_tax, "no item tax group to put on the items")
+		self.assertEqual(
+			sorted(r.tax_rate for r in frappe.get_doc("Item Tax Template", item_tax).taxes), [18.0, 18.0]
+		)
+
+		# Nothing is planned twice.
+		self.assertEqual(api.configure_preview(self.onboarding.name, "tax_setup")["changes"], [])
+
+	def test_no_tax_rates_means_nothing_is_invented(self):
+		"""A business that is not registered gets no templates and no accounts."""
+		self.answer_interview(tax_registered="no")
+		from embark import configure
+
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		self.assertEqual(configure.plan_changes(doc, "tax_setup"), [])

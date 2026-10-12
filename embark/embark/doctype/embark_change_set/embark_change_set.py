@@ -32,6 +32,12 @@ from frappe.model.document import Document
 # imported onto a list that does not exist; the rates on it stay the customer's.
 ALLOWED = (
 	# The settings a standard implementation configures
+	"Account",
+	"Sales Taxes and Charges Template",
+	"Purchase Taxes and Charges Template",
+	"Item Tax Template",
+	"Tax Category",
+	"Payment Terms Template",
 	"Selling Settings",
 	"Buying Settings",
 	"Stock Settings",

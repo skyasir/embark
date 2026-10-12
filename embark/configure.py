@@ -163,7 +163,131 @@ def _price_lists(doc) -> list[dict]:
 	]
 
 
+def _tax_setup(doc) -> list[dict]:
+	"""Tax accounts and ready-made templates, one set per rate they charge.
+
+	A standard implementation stands or falls on this: without templates nobody
+	can raise a correct invoice, and ERPNext ships none. The rates come from the
+	interview, and nothing else is invented — the accounts hang under the chart
+	of accounts' own "Duties and Taxes" group, and the rate on each template is
+	the rate they said.
+	"""
+	rates = [r for r in (answers(doc).get("tax_rates") or "").split(",") if r.strip()]
+	company = _company_of(doc)
+	if not (rates and company):
+		return []
+
+	parent = frappe.db.get_value(
+		"Account", {"company": company, "account_name": "Duties and Taxes", "is_group": 1}, "name"
+	)
+	if not parent:
+		return []
+
+	abbr = frappe.db.get_value("Company", company, "abbr")
+	changes = []
+	for rate in rates:
+		rate = rate.strip()
+		heads = {}
+		for side, word in (("Output", _("charged on what you sell")), ("Input", _("paid on what you buy"))):
+			account_name = f"{side} Tax {rate}%"
+			heads[side] = f"{account_name} - {abbr}"
+			if not frappe.db.exists("Account", heads[side]):
+				changes.append(
+					{
+						"action": "Create",
+						"ref_doctype": "Account",
+						"ref_name": None,
+						"summary": _("Account {0} — tax {1}").format(account_name, word),
+						"payload": json.dumps(
+							{
+								"account_name": account_name,
+								"parent_account": parent,
+								"company": company,
+								"account_type": "Tax",
+								"is_group": 0,
+								"tax_rate": float(rate),
+							}
+						),
+					}
+				)
+
+		title = f"Tax {rate}%"
+		for doctype, head, label in (
+			("Sales Taxes and Charges Template", heads["Output"], _("on sales")),
+			("Purchase Taxes and Charges Template", heads["Input"], _("on purchases")),
+		):
+			if frappe.db.exists(doctype, {"title": title, "company": company}):
+				continue
+			changes.append(
+				{
+					"action": "Create",
+					"ref_doctype": doctype,
+					"ref_name": None,
+					"summary": _("{0}% {1}, ready to pick on a document").format(rate, label),
+					"payload": json.dumps(
+						{
+							"title": title,
+							"company": company,
+							"taxes": [
+								{
+									"charge_type": "On Net Total",
+									"account_head": head,
+									"description": title,
+									"rate": float(rate),
+								}
+							],
+						}
+					),
+				}
+			)
+
+		if not frappe.db.exists("Item Tax Template", {"title": title, "company": company}):
+			changes.append(
+				{
+					"action": "Create",
+					"ref_doctype": "Item Tax Template",
+					"ref_name": None,
+					"summary": _("Item tax group {0}, to put on the items it applies to").format(title),
+					"payload": json.dumps(
+						{
+							"title": title,
+							"company": company,
+							"taxes": [
+								{"tax_type": heads["Output"], "tax_rate": float(rate)},
+								{"tax_type": heads["Input"], "tax_rate": float(rate)},
+							],
+						}
+					),
+				}
+			)
+
+	return changes
+
+
+def answers(doc) -> dict[str, str]:
+	"""The answers that still count.
+
+	An answer stays on the record after its question stops being asked — say
+	the customer answers a tax rate and then tells us they are not registered.
+	The plan already ignores those: a condition on a question outside the
+	interview reads false. A recipe has to read them the same way, or it
+	configures a site from something nobody is being asked any more.
+	"""
+	from embark.engine import asked_keys
+
+	given = doc.answer_map()
+	asked = asked_keys(given)
+	return {key: value for key, value in given.items() if key in asked}
+
+
+def _company_of(doc) -> str | None:
+	if doc.company_name and frappe.db.exists("Company", doc.company_name):
+		return doc.company_name
+	return frappe.db.get_value("Company", {}, "name", order_by="creation asc")
+
+
 RECIPES = {
+	"tax_setup": _tax_setup,
 	"sales_flow": _sales_flow,
 	"partial_delivery": _partial_delivery,
 	"purchase_flow": _purchase_flow,
