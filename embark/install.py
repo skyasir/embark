@@ -153,35 +153,6 @@ AREAS = [
 		],
 	},
 	{
-		"area_name": "Units of Measure",
-		"because": "the units you buy, sell and stock in",
-		"applies_when": "keeps_stock == yes",
-		"icon": "hash",
-		"required": 0,
-		"target_doctype": "UOM",
-		"key_field": "uom_name",
-		"sequence": 30,
-		"description": "Extra units you buy, sell or stock in.",
-		"help_text": "ERPNext already has more than 200 units, such as Nos, Kg, Litre, Box and Meter. Only list units that are missing.",
-		"fields": [
-			{
-				"fieldname": "uom_name",
-				"label": "Unit",
-				"required": 1,
-				"example": "Carton",
-				"aliases": "UOM, Unit Name, Unit of Measure, Units",
-			},
-			{
-				"fieldname": "must_be_whole_number",
-				"label": "Whole Numbers Only",
-				"default_value": "No",
-				"example": "Yes",
-				"hint": "Yes if you can't have half of this unit.",
-				"aliases": "Whole Number",
-			},
-		],
-	},
-	{
 		"area_name": "Warehouses",
 		"because": "you keep stock",
 		"icon": "archive",
@@ -502,7 +473,7 @@ AREAS = [
 				"label": "Unit",
 				"required": 1,
 				"example": "Nos",
-				"hint": "Nos, Kg, Litre, Box... or a unit from your Units of Measure sheet.",
+				"hint": "Nos, Kg, Litre, Box — ERPNext already knows the usual ones.",
 				"aliases": "UOM, Unit of Measure, Units, Base Unit",
 			},
 			{
@@ -549,7 +520,6 @@ AREAS = [
 CORE_AREAS = [
 	("Users", 1),
 	("Item Groups", 0),
-	("Units of Measure", 0),
 	("Warehouses", 1),
 	("Customers", 1),
 	("Suppliers", 1),

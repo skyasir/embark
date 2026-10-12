@@ -255,17 +255,17 @@ class TestOnboardingFlow(TestCase):
 
 	def test_remove_file(self):
 		self.answer_interview()
-		self.upload("Units of Measure", [["Unit"], ["Carton"]])
-		self.assertEqual(self.step("Units of Measure")["status"], "Ready")
-		area = api.remove_file(self.onboarding.name, "Units of Measure")
+		self.upload("Item Groups", [["Item Group"], ["Spare Parts"]])
+		self.assertEqual(self.step("Item Groups")["status"], "Ready")
+		area = api.remove_file(self.onboarding.name, "Item Groups")
 		self.assertIsNone(area["upload"])
-		self.assertEqual(self.step("Units of Measure")["status"], "Not Started")
+		self.assertEqual(self.step("Item Groups")["status"], "Not Started")
 		self.assertFalse(frappe.db.exists("Embark Upload", {"onboarding": self.onboarding.name}))
 
 		# Once sent for review, the customer can't remove files either.
-		self.upload("Units of Measure", [["Unit"], ["Carton"]])
+		self.upload("Item Groups", [["Item Group"], ["Spare Parts"]])
 		frappe.db.set_value("Embark Onboarding", self.onboarding.name, "status", "Submitted")
-		self.assertRaises(frappe.ValidationError, api.remove_file, self.onboarding.name, "Units of Measure")
+		self.assertRaises(frappe.ValidationError, api.remove_file, self.onboarding.name, "Item Groups")
 
 	def step(self, area):
 		return next(s for s in api.get_overview(self.onboarding.name)["steps"] if s["area"] == area)
