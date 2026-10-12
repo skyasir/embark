@@ -58,18 +58,24 @@ def import_all(onboarding) -> dict:
 	for row in sorted(onboarding.areas, key=lambda r: _sequence(r.data_area)):
 		steps.append(import_area(onboarding, row.data_area, company))
 
+	also: dict[str, int] = {}
+	for step in steps:
+		for kind, count in step.get("also", {}).items():
+			also[kind] = also.get(kind, 0) + count
+
 	return {
 		"company": company,
 		"created": sum(s["created"] for s in steps),
 		"skipped": sum(s["skipped"] for s in steps),
 		"failed": sum(len(s["failures"]) for s in steps),
+		"also": also,
 		"steps": steps,
 	}
 
 
 def import_area(onboarding, area: str, company: str | None = None) -> dict:
 	"""One step: its checked rows become records, or the reason they could not."""
-	out = {"area": area, "created": 0, "skipped": 0, "failures": [], "reason": ""}
+	out = {"area": area, "created": 0, "skipped": 0, "failures": [], "reason": "", "also": {}}
 	name = frappe.db.get_value("Embark Upload", {"onboarding": onboarding.name, "data_area": area}, "name")
 	if not name:
 		out["reason"] = _("Nothing was uploaded for this step.")
@@ -99,8 +105,10 @@ def import_area(onboarding, area: str, company: str | None = None) -> dict:
 			out["skipped"] += 1
 			continue
 		try:
-			_create(doctype, values, company, named)
+			doc = _create(doctype, values, company, named)
 			out["created"] += 1
+			for kind, count in _companions(doc, row, onboarding).items():
+				out["also"][kind] = out["also"].get(kind, 0) + count
 		except Exception as e:
 			frappe.db.rollback(save_point="embark_row")
 			out["failures"].append({"row": row.get("_row"), "why": _why(e)})
@@ -115,7 +123,97 @@ def _why(e: Exception) -> str:
 	return " ".join(strip_html(str(e)).split())[:200] or _("ERPNext refused this row.")
 
 
-def _create(doctype: str, values: dict, company: str | None, named: str | None = None) -> None:
+# A customer or a supplier is not usable until somebody can be written to and
+# invoiced. ERPNext keeps that on Address and Contact records, linked back, and
+# the party's own email and phone fields are read-only copies of the contact's.
+COMPANION_PARTIES = ("Customer", "Supplier")
+
+
+def _companions(doc, row: dict, onboarding) -> dict:
+	"""The address and the contact that make a party usable, from the same row."""
+	if doc.doctype not in COMPANION_PARTIES:
+		return {}
+
+	made = {}
+	if _address(doc, row, onboarding):
+		made["Address"] = 1
+	if _contact(doc, row):
+		made["Contact"] = 1
+	return made
+
+
+def _address(doc, row: dict, onboarding) -> bool:
+	"""Where to invoice them. ERPNext insists on a street, a city and a country."""
+	line, city = _value(row, "address_line1"), _value(row, "address_city")
+	if not (line and city):
+		return False
+	if frappe.db.exists(
+		"Dynamic Link", {"link_doctype": doc.doctype, "link_name": doc.name, "parenttype": "Address"}
+	):
+		return False
+
+	country = _value(row, "address_country") or _value(row, "country") or onboarding.country
+	if not country or not frappe.db.exists("Country", country):
+		country = frappe.db.get_default("country") or "India"
+
+	frappe.get_doc(
+		{
+			"doctype": "Address",
+			"address_title": doc.name,
+			"address_type": "Billing",
+			"address_line1": line,
+			"city": city,
+			"state": _value(row, "address_state") or None,
+			"pincode": _value(row, "address_pincode") or None,
+			"country": country,
+			"email_id": _value(row, "contact_email") or None,
+			"phone": _value(row, "contact_phone") or None,
+			"is_primary_address": 1,
+			"links": [{"link_doctype": doc.doctype, "link_name": doc.name}],
+		}
+	).insert(ignore_permissions=True)
+	return True
+
+
+def _contact(doc, row: dict) -> bool:
+	"""Somebody to write to. Without one the party's email and phone stay blank."""
+	person, email, phone = (
+		_value(row, "contact_person"),
+		_value(row, "contact_email"),
+		_value(row, "contact_phone"),
+	)
+	if not (email or phone):
+		return False
+	if frappe.db.exists(
+		"Dynamic Link", {"link_doctype": doc.doctype, "link_name": doc.name, "parenttype": "Contact"}
+	):
+		return False
+
+	# No name given: the business is the contact, which is how a small supplier
+	# usually answers the phone anyway.
+	first, _sep, last = (person or doc.name).partition(" ")
+	contact = frappe.get_doc(
+		{
+			"doctype": "Contact",
+			"first_name": first,
+			"last_name": last or None,
+			"is_primary_contact": 1,
+			"links": [{"link_doctype": doc.doctype, "link_name": doc.name}],
+		}
+	)
+	if email:
+		contact.append("email_ids", {"email_id": email, "is_primary": 1})
+	if phone:
+		contact.append("phone_nos", {"phone": phone, "is_primary_mobile_no": 1})
+	contact.insert(ignore_permissions=True)
+	return True
+
+
+def _value(row: dict, field: str) -> str:
+	return str(row.get(field) or "").strip()
+
+
+def _create(doctype: str, values: dict, company: str | None, named: str | None = None):
 	"""One record, inside a save point so a refusal costs only that row."""
 	frappe.db.savepoint("embark_row")
 	doc = frappe.new_doc(doctype)
@@ -130,6 +228,7 @@ def _create(doctype: str, values: dict, company: str | None, named: str | None =
 	if named and _named_by_hand(doctype):
 		doc.name = named
 	doc.insert(ignore_permissions=True)
+	return doc
 
 
 def _named_by_hand(doctype: str) -> bool:

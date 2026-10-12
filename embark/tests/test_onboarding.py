@@ -1045,3 +1045,74 @@ class TestOnboardingFlow(TestCase):
 			plain = assistant._unreachable(failure)
 		self.assertNotIn("ghost-model", plain)
 		self.assertNotIn("nowhere.invalid", plain)
+
+	def test_a_customer_arrives_with_somewhere_to_invoice_and_someone_to_write_to(self):
+		"""A party with no address cannot be invoiced, and ERPNext keeps the
+		email and phone on a Contact — the fields on the customer are read-only
+		copies of it."""
+		if not api.setup_done():
+			self.skipTest("no company on this site yet")
+		self.answer_interview()
+		self.upload(
+			"Customers",
+			[
+				["Customer Name", "Tax ID", "Contact", "Email", "Mobile", "Address", "City", "State", "PIN / Postal Code"],
+				[
+					"Northwind Traders",
+					"27AAACS1234A1Z5",
+					"Aisha Khan",
+					"aisha@northwind.example",
+					"9876543210",
+					"14 Nehru Road",
+					"Pune",
+					"Maharashtra",
+					"411001",
+				],
+			],
+		)
+		summary = api.create_in_erpnext(self.onboarding.name)["summary"]
+		step = next(s for s in summary["steps"] if s["area"] == "Customers")
+		self.assertEqual(step["created"], 1, step)
+		self.assertEqual(step["also"], {"Address": 1, "Contact": 1}, step)
+
+		self.assertEqual(frappe.db.get_value("Customer", "Northwind Traders", "tax_id"), "27AAACS1234A1Z5")
+
+		address = frappe.db.get_value(
+			"Dynamic Link",
+			{"link_doctype": "Customer", "link_name": "Northwind Traders", "parenttype": "Address"},
+			"parent",
+		)
+		self.assertTrue(address, "no address to invoice them at")
+		self.assertEqual(
+			frappe.db.get_value("Address", address, ["address_line1", "city", "state", "pincode"]),
+			("14 Nehru Road", "Pune", "Maharashtra", "411001"),
+		)
+
+		contact = frappe.db.get_value(
+			"Dynamic Link",
+			{"link_doctype": "Customer", "link_name": "Northwind Traders", "parenttype": "Contact"},
+			"parent",
+		)
+		self.assertTrue(contact, "nobody to write to")
+		self.assertEqual(frappe.db.get_value("Contact", contact, "first_name"), "Aisha")
+		# ERPNext copies them onto the customer from the primary contact.
+		self.assertEqual(
+			frappe.db.get_value("Contact Email", {"parent": contact}, "email_id"),
+			"aisha@northwind.example",
+		)
+
+		# Pressing again adds no second address and no second contact.
+		again = api.create_in_erpnext(self.onboarding.name)["summary"]
+		self.assertEqual(again["also"], {}, again)
+
+	def test_a_party_with_no_contact_details_still_imports(self):
+		"""Most sheets have a name and nothing else. That is still a customer."""
+		if not api.setup_done():
+			self.skipTest("no company on this site yet")
+		self.answer_interview()
+		self.upload("Customers", [["Customer Name"], ["Bare Name Only"]])
+		summary = api.create_in_erpnext(self.onboarding.name)["summary"]
+		step = next(s for s in summary["steps"] if s["area"] == "Customers")
+		self.assertEqual(step["created"], 1)
+		self.assertEqual(step["also"], {})
+		self.assertTrue(frappe.db.exists("Customer", "Bare Name Only"))
