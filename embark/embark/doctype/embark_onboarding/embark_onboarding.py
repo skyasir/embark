@@ -54,7 +54,10 @@ class EmbarkOnboarding(Document):
 		planned = bool(self.areas) or self.interview()["done"]
 		wanted = []
 		for area in frappe.get_all(
-			"Embark Data Area", fields=["name", "required", "applies_when"], order_by="sequence asc"
+			"Embark Data Area",
+			filters={"is_active": 1},
+			fields=["name", "required", "applies_when"],
+			order_by="sequence asc",
 		):
 			kept = existing.get(area.name)
 			if (planned and applies(area.applies_when, answers, asked)) or (kept and kept.upload):

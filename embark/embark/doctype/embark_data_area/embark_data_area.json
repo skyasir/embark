@@ -10,6 +10,7 @@
   "key_field",
   "applies_when",
   "required",
+  "is_active",
   "sequence",
   "icon",
   "column_break_1",
@@ -101,6 +102,13 @@
    "fieldname": "required",
    "fieldtype": "Check",
    "label": "Required"
+  },
+  {
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Active",
+   "default": "1",
+   "description": "A step that is switched off is not asked for on new onboardings. Uploads already made are left alone."
   }
  ],
  "index_web_pages_for_search": 0,
