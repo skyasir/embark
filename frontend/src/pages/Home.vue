@@ -1,200 +1,156 @@
 <template>
 	<StartOnboarding v-if="o && o.needs_start" @configure-ai="aiOpen = true" />
-	<div v-else-if="o" class="space-y-6">
-		<ConsultantPanel v-if="o.is_staff" :o="o" />
-		<div>
-			<h1 class="text-2xl font-semibold text-ink-gray-9">Let's get {{ o.client_name }} ready for ERPNext</h1>
-			<p v-if="planned" class="mt-2 text-base leading-relaxed text-ink-gray-6">
-				Work through the steps below. We check your data as you go, so setting up ERPNext goes quickly
-				instead of turning into spreadsheet archaeology.
-			</p>
-			<p v-else class="mt-2 text-base leading-relaxed text-ink-gray-6">
-				Start with a few questions about how you work. Your answers decide what we set up and what we
-				need from you — so you are never asked for data your business doesn't use.
-			</p>
+
+	<div v-else-if="o" class="flex gap-8">
+		<!-- Where the implementation stands, and the way back into it. -->
+		<div class="min-w-0 flex-1 space-y-6">
+			<div>
+				<h1 class="text-2xl font-semibold text-ink-gray-9">
+					Setting up {{ o.client_name }} in ERPNext
+				</h1>
+				<p class="mt-2 text-base leading-relaxed text-ink-gray-6">
+					Answer the setup questions and Embark builds each record in ERPNext for you — the company,
+					the financial year, your groups and warehouses — and shows you exactly what it wrote.
+				</p>
+			</div>
+
+			<div class="rounded-lg border border-outline-gray-2 p-5">
+				<div class="flex items-baseline justify-between">
+					<span class="text-base text-ink-gray-6">Setup</span>
+					<span class="text-sm text-ink-gray-5">
+						{{ state2.built }} of {{ state2.tasks.length }} records built
+					</span>
+				</div>
+				<div class="mt-1 flex items-baseline gap-3">
+					<span class="text-3xl font-semibold tabular-nums text-ink-gray-9">{{ state2.percent }}%</span>
+					<span class="text-base text-ink-gray-5">
+						{{ state2.answered }} of {{ state2.total }} questions answered
+					</span>
+				</div>
+				<div class="mt-3 h-2 overflow-hidden rounded-full bg-surface-gray-2">
+					<div
+						class="h-full rounded-full bg-surface-gray-7 transition-all duration-500"
+						:style="{ width: `${state2.percent}%` }"
+					/>
+				</div>
+				<div class="mt-4">
+					<router-link :to="{ name: 'setup' }">
+						<Button variant="solid" size="md" icon-right="arrow-right">
+							{{ state2.answered ? "Continue setup" : "Start setup" }}
+						</Button>
+					</router-link>
+				</div>
+			</div>
+
+			<!-- Each step, and whether it exists in ERPNext yet. -->
+			<ul class="divide-y divide-outline-gray-1 overflow-hidden rounded-lg border border-outline-gray-2">
+				<li v-for="task in state2.tasks" :key="task.task" class="flex items-center gap-3 px-4 py-3">
+					<FeatherIcon
+						:name="task.record ? 'check-circle' : task.icon || 'circle'"
+						class="size-4 shrink-0"
+						:class="task.record ? 'text-ink-green-3' : 'text-ink-gray-4'"
+					/>
+					<div class="min-w-0 flex-1">
+						<div class="truncate text-base font-medium text-ink-gray-9">{{ task.title }}</div>
+						<div class="truncate text-sm text-ink-gray-5">
+							{{ task.record ? `${task.doctype} · ${task.record.name}` : task.doctype }}
+						</div>
+					</div>
+					<span class="shrink-0 text-sm tabular-nums text-ink-gray-5">
+						{{ task.answered }}/{{ task.total }}
+					</span>
+					<Badge
+						:theme="task.record ? 'green' : task.answered ? 'orange' : 'gray'"
+						size="sm"
+						:label="task.record ? 'In ERPNext' : task.state"
+					/>
+				</li>
+			</ul>
 		</div>
 
-		<TallyHint />
-
-		<Callout v-if="o.status === 'Returned'" tone="warning">
-			<strong>Your consultant sent this back with a note.</strong>
-			<p class="mt-1 whitespace-pre-line">{{ o.review_notes }}</p>
-		</Callout>
-		<Callout v-else-if="o.status === 'Submitted'" tone="success">
-			<strong>Sent for review.</strong> Your consultant is checking your data and will be in touch to
-			schedule the implementation.
-		</Callout>
-		<Callout v-else-if="o.status === 'Approved'" tone="success">
-			<template v-if="inErpnext">
-				<strong>You are live.</strong>
-				{{ inErpnext }} {{ inErpnext === 1 ? "record is" : "records are" }} in ERPNext — open the
-				<a href="/app" class="underline">desk</a> to see them.
-			</template>
-			<template v-else>
-				<strong>All set.</strong> Your data has been approved and is ready for the implementation.
-			</template>
-		</Callout>
-
-		<Callout v-if="!planned" tone="info" icon="list">
-			<strong>Your checklist comes from your answers.</strong>
-			Finish the questions and the steps below will be the ones your business actually needs —
-			nothing more.
-		</Callout>
-
-		<div v-else class="rounded-lg border border-outline-gray-2 p-5">
-			<div class="mb-3 flex items-end justify-between gap-4">
+		<!-- The ERPNext view: the records themselves, as the site holds them.
+		     The site's own screens are a page wide, so they are on Ask. -->
+		<aside class="hidden w-[460px] shrink-0 space-y-4 border-l border-outline-gray-2 pl-6 xl:block">
+			<div class="flex items-end justify-between gap-2">
 				<div>
-					<div class="text-base text-ink-gray-6">Readiness</div>
-					<div class="text-3xl font-semibold tabular-nums text-ink-gray-9">{{ o.readiness }}%</div>
+					<h2 class="text-base font-semibold text-ink-gray-8">ERPNext</h2>
+					<p class="text-sm text-ink-gray-5">What is on this site, read back from the records.</p>
 				</div>
-				<div class="pb-1 text-base tabular-nums text-ink-gray-6">
-					{{ readySteps }} of {{ requiredSteps }} required steps ready
-				</div>
+				<a :href="framePath" target="_blank" rel="noopener" class="shrink-0">
+					<Button size="sm" variant="ghost" icon="external-link" label="Open the site" />
+				</a>
 			</div>
-			<div class="h-2 overflow-hidden rounded-full bg-surface-gray-2">
-				<div
-					class="h-full rounded-full transition-all"
-					:class="o.readiness === 100 ? 'bg-surface-green-3' : 'bg-surface-gray-7'"
-					:style="{ width: `${o.readiness}%` }"
-				/>
-			</div>
-		</div>
 
-		<ol class="divide-y divide-outline-gray-1 overflow-hidden rounded-lg border border-outline-gray-2">
-			<StepRow
-				icon="briefcase"
-				title="Company details"
-				:description="
-					o.company_from_erpnext
-						? 'Taken from the company already set up in ERPNext.'
-						: 'Your company name, country, currency and financial year.'
-				"
-				:to="{ name: 'company' }"
-				:status="o.company_complete ? 'Ready' : 'Not Started'"
-			/>
-			<StepRow
-				icon="message-square"
-				title="Tell us about your business"
-				:description="`What you do, so we only ask for what matters. ${o.interview.answered} of ${o.interview.total} answered.`"
-				:to="{ name: 'interview' }"
-				:status="interviewStatus"
-			/>
-			<StepRow
-				v-for="step in o.steps"
-				:key="step.area"
-				:title="step.area"
-				:icon="step.icon"
-				:description="step.description"
-				:to="{ name: 'area', params: { area: step.area } }"
-				:status="step.status"
-				:errors="step.errors"
-				:required="step.required"
-				:rows="step.rows"
-			/>
-		</ol>
-
-		<PlanSection
-			:plan="o.plan"
-			kind="Setting"
-			icon="settings"
-			title="What we'll set up in ERPNext"
-			subtitle="Worked out from your answers. Nothing here is extra work for you."
-		/>
-		<PlanSection
-			:plan="o.plan"
-			kind="Decision"
-			icon="help-circle"
-			title="Decisions we need from you"
-			subtitle="Small choices that are hard to change once you are live."
-		/>
-		<PlanSection
-			:plan="o.plan"
-			kind="Training"
-			icon="play-circle"
-			title="Training at handover"
-			subtitle="What we walk your team through once the data is in."
-		/>
-
-		<div class="flex flex-wrap items-center justify-between gap-3">
-			<p class="text-base text-ink-gray-6">
-				<template v-if="o.status === 'Submitted'">The data has been sent for review.</template>
-				<template v-else-if="o.status === 'Approved'">The data has been approved.</template>
-				<template v-else-if="o.can_submit">Everything required is ready.</template>
-				<template v-else-if="!o.company_complete">
-					Start with your company details, then the questions.
-				</template>
-				<template v-else-if="!planned">Answer the questions first, then we'll know what to ask you for.</template>
-				<template v-else>Finish every required step to send your data for review.</template>
-			</p>
-			<Button
-				v-if="!['Submitted', 'Approved'].includes(o.status)"
-				variant="solid"
-				size="md"
-				icon-right="arrow-right"
-				:disabled="!o.can_submit"
-				:loading="submitting"
-				@click="submit"
+			<div
+				v-for="task in built"
+				:key="task.task"
+				class="overflow-hidden rounded-lg border border-outline-green-2"
 			>
-				Send for review
-			</Button>
-		</div>
+				<div class="flex items-center gap-2 border-b border-outline-green-2 bg-surface-green-1 px-3 py-2">
+					<FeatherIcon name="check-circle" class="size-3.5 shrink-0 text-ink-green-3" />
+					<span class="min-w-0 flex-1 truncate text-sm font-medium text-ink-green-3">
+						{{ task.record.doctype }}
+					</span>
+					<a :href="task.record.url" target="_blank" rel="noopener">
+						<Button size="sm" variant="ghost" icon="external-link" label="Open in ERPNext" />
+					</a>
+				</div>
+				<table class="w-full text-sm">
+					<tbody>
+						<tr class="border-b border-outline-gray-1">
+							<td class="px-3 py-1.5 text-ink-gray-5">Name</td>
+							<td class="px-3 py-1.5 font-medium text-ink-gray-9">{{ task.record.name }}</td>
+						</tr>
+						<tr
+							v-for="f in task.record.fields.slice(0, 5)"
+							:key="f.field"
+							class="border-b border-outline-gray-1 last:border-0"
+						>
+							<td class="w-2/5 px-3 py-1.5 align-top text-ink-gray-5">{{ f.field }}</td>
+							<td class="px-3 py-1.5 align-top text-ink-gray-8">{{ f.value }}</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<p
+				v-if="!built.length"
+				class="rounded-lg border border-outline-gray-2 px-3 py-4 text-sm text-ink-gray-5"
+			>
+				Nothing built yet. Answer a step's questions and press Create in ERPNext, and the record appears
+				here with every field Embark wrote.
+			</p>
+		</aside>
 	</div>
 
 	<AiSettings v-model="aiOpen" />
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue"
-import { Badge, toast } from "frappe-ui"
+import { computed, ref, watch } from "vue"
+import { Badge, Button, FeatherIcon } from "frappe-ui"
 
-import Callout from "../components/Callout.vue"
-import ConsultantPanel from "../components/ConsultantPanel.vue"
 import AiSettings from "../components/AiSettings.vue"
 import StartOnboarding from "../components/StartOnboarding.vue"
-import PlanSection from "../components/PlanSection.vue"
-import StepRow from "../components/StepRow.vue"
-import TallyHint from "../components/TallyHint.vue"
-import { api, errorText } from "../data/api"
-import { loadOverview, setOverview, state } from "../data/store"
+import { api } from "../data/api"
+import { state } from "../data/store"
 
-const o = computed(() => state.overview)
-// Rows that are in ERPNext, whether this run put them there or a previous one.
-const inErpnext = computed(() => {
-	const s = o.value?.import_summary
-	return s ? s.created + s.skipped : 0
-})
-const submitting = ref(false)
 const aiOpen = ref(false)
+const o = computed(() => state.overview)
+const state2 = ref({ tasks: [], answered: 0, total: 0, percent: 0, built: 0 })
+const built = computed(() => state2.value.tasks.filter((t) => t.record))
 
-// The checklist is built once the interview is answered, not before.
-const planned = computed(() => o.value.steps.length > 0)
+/** "Open the site" goes to the newest record Embark made, else the desk. */
+const framePath = computed(() => built.value[built.value.length - 1]?.record?.url || "/app")
 
-const interviewStatus = computed(() =>
-	o.value.interview.done ? "Ready" : o.value.interview.answered ? "In Progress" : "Not Started"
-)
-
-const requiredSteps = computed(() => 2 + o.value.steps.filter((s) => s.required).length)
-const readySteps = computed(
-	() =>
-		Number(o.value.interview.done) +
-		Number(o.value.company_complete) +
-		o.value.steps.filter((s) => s.required && s.status === "Ready").length
-)
-
-async function submit() {
-	submitting.value = true
+async function load() {
+	if (!state.id) return
 	try {
-		setOverview(await api("submit_for_review", { onboarding: o.value.name }))
-		toast.success("Sent for review")
-	} catch (e) {
-		toast.error(errorText(e))
-	} finally {
-		submitting.value = false
+		state2.value = await api("wizard_state", { onboarding: state.id })
+	} catch {
+		// The overview is a mirror: if it cannot read, it shows nothing rather than a lie.
 	}
 }
 
-// Coming back from a step, pick up its new status.
-onMounted(() => {
-	if (o.value) loadOverview()
-})
+watch(() => state.id, load, { immediate: true })
 </script>

@@ -35,7 +35,9 @@
   "imported_at",
   "import_log",
   "section_review",
-  "review_notes"
+  "review_notes",
+  "section_wizard",
+  "wizard_answers"
  ],
  "fields": [
   {
@@ -217,6 +219,18 @@
    "fieldtype": "Table",
    "label": "Answers",
    "options": "Embark Onboarding Answer"
+  },
+  {
+   "fieldname": "section_wizard",
+   "fieldtype": "Section Break",
+   "label": "Setup Wizard",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "wizard_answers",
+   "fieldtype": "Table",
+   "label": "Answers",
+   "options": "Embark Wizard Answer"
   }
  ],
  "index_web_pages_for_search": 0,
