@@ -71,7 +71,7 @@
 
 		<!-- ── One question at a time ──────────────────────────────────── -->
 		<section v-if="current" class="min-w-0 flex-1 overflow-y-auto">
-			<div class="mx-auto max-w-2xl pb-10">
+			<div class="mx-auto max-w-3xl pb-10">
 				<Badge theme="gray" size="sm" :label="`Question ${position} of ${board.total}`" />
 
 				<h2 class="mt-3 text-2xl font-semibold leading-snug text-ink-gray-9">{{ current.label }}</h2>
@@ -130,6 +130,38 @@
 					</div>
 				</div>
 
+				<div
+					v-if="lastCheck?.ready"
+					class="mt-6 rounded-lg border border-outline-gray-2 bg-surface-gray-1 px-4 py-3"
+				>
+					<div class="flex items-start gap-2">
+						<FeatherIcon name="shield" class="mt-0.5 size-4 shrink-0 text-ink-gray-5" />
+						<div class="min-w-0">
+							<p class="text-base font-medium text-ink-gray-8">{{ lastCheck.about_to }}</p>
+							<ul class="mt-1 space-y-0.5">
+								<li v-for="(reason, i) in lastCheck.safe_because" :key="i" class="text-sm text-ink-gray-6">
+									{{ reason }}
+								</li>
+							</ul>
+						</div>
+					</div>
+				</div>
+
+				<div
+					v-if="lastRecord"
+					class="mt-6 overflow-hidden rounded-lg border border-outline-green-2"
+				>
+					<div class="flex items-center gap-2 border-b border-outline-green-2 bg-surface-green-1 px-3 py-2">
+						<FeatherIcon name="check-circle" class="size-4 shrink-0 text-ink-green-3" />
+						<span class="min-w-0 flex-1 truncate text-sm font-semibold text-ink-green-3">
+							{{ lastRecord.doctype }} {{ lastRecord.name }} is in ERPNext
+						</span>
+						<a :href="lastRecord.url" target="_blank" rel="noopener">
+							<Button size="sm" variant="ghost" icon-right="external-link" label="Open" />
+						</a>
+					</div>
+				</div>
+
 				<div class="mt-8 flex items-center justify-between">
 					<Button variant="ghost" icon-left="chevron-left" :disabled="position === 1" @click="previous()">
 						Previous
@@ -152,10 +184,6 @@
 			</div>
 		</section>
 
-		<!-- ── What this means in ERPNext ──────────────────────────────── -->
-		<aside class="hidden w-96 shrink-0 overflow-y-auto border-l border-outline-gray-2 pl-6 xl:block">
-			<ErpnextPane :task="currentTask" :record="lastRecord" :check="lastCheck" />
-		</aside>
 	</div>
 </template>
 
@@ -163,7 +191,6 @@
 import { computed, ref, watch } from "vue"
 import { Autocomplete, Badge, Button, FeatherIcon, FormControl, LoadingIndicator, toast } from "frappe-ui"
 
-import ErpnextPane from "../components/ErpnextPane.vue"
 import { api, errorText } from "../data/api"
 import { state } from "../data/store"
 

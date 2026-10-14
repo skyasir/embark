@@ -677,6 +677,13 @@ def suggestions(doctype: str, limit: int = 50) -> list[str]:
 
 
 @frappe.whitelist()
+def wizard_state(onboarding: str | None = None) -> dict:
+	"""Every task and the ERPNext record it has produced, read back live."""
+	doc = _get_onboarding(onboarding)
+	return wizard_engine.state(doc)
+
+
+@frappe.whitelist()
 def wizard_check(task: str, onboarding: str | None = None) -> dict:
 	"""What applying this task would write, before it is written."""
 	doc = _get_onboarding(onboarding)

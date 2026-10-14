@@ -57,7 +57,7 @@
    "fieldname": "answer_type",
    "fieldtype": "Select",
    "label": "Answer Type",
-   "options": "Text\nLong Text\nNumber\nDate\nSelect\nYes / No\nLink",
+   "options": "Text\nLong Text\nNumber\nDate\nSelect\nMultiple Choice\nYes / No\nLink",
    "default": "Text",
    "reqd": 1
   },
