@@ -1223,23 +1223,23 @@ class TestSetupWizard(TestCase):
 		"""The whole point of asking for modules second."""
 		self.answer("modules", "accounts")
 		without = self.board()
-		self.assertIsNone(self.task(without, "Create a parent warehouse"))
+		self.assertIsNone(self.task(without, "Set up warehouses"))
 
 		self.answer("modules", "accounts,stock")
 		with_stock = self.board()
-		self.assertIsNotNone(self.task(with_stock, "Create a parent warehouse"))
+		self.assertIsNotNone(self.task(with_stock, "Set up warehouses"))
 		self.assertGreater(with_stock["total"], without["total"])
 
 	def test_dropping_a_module_hides_its_answers_but_keeps_them(self):
 		"""Going back is safe: the answers are still there if they return."""
 		self.answer("modules", "accounts,stock")
-		self.answer("parent_wh_name", "Main Store")
+		self.answer("additional_warehouse_name", "Main Store")
 		self.answer("modules", "accounts")
-		self.assertIsNone(self.task(self.board(), "Create a parent warehouse"))
+		self.assertIsNone(self.task(self.board(), "Set up warehouses"))
 
 		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
 		kept = {row.question: row.value for row in doc.wizard_answers}
-		self.assertEqual(kept.get("parent_wh_name"), "Main Store")
+		self.assertEqual(kept.get("additional_warehouse_name"), "Main Store")
 
 	def test_a_form_of_answers_is_saved_in_one_go(self):
 		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
@@ -1257,7 +1257,7 @@ class TestSetupWizard(TestCase):
 		task = frappe.get_doc(
 			{
 				"doctype": "Embark Wizard Task",
-				"task_name": "Set up credit terms",
+				"task_name": "Test step: two records",
 				"sequence": 999,
 				"stage": "Setup",
 				"description": "Test step.",
@@ -1305,7 +1305,7 @@ class TestSetupWizard(TestCase):
 		task = frappe.get_doc(
 			{
 				"doctype": "Embark Wizard Task",
-				"task_name": "Set up quality checks",
+				"task_name": "Test step: a decision",
 				"sequence": 998,
 				"stage": "Setup",
 				"target_doctype": "Quality Inspection Template",
