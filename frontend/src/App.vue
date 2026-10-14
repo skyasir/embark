@@ -9,24 +9,35 @@
 			<Dropdown :options="appMenu" placement="right">
 				<button class="rounded-lg p-1 transition-colors hover:bg-surface-gray-2" aria-label="Embark">
 					<svg viewBox="0 0 54 54" class="size-9" aria-hidden="true">
-						<rect width="54" height="54" rx="15.43" fill="#1668E3" />
-						<g transform="translate(13 12) scale(0.52)">
-							<path d="M0 0h10v56H0z" fill="#fff" />
-							<path d="M6 0h44l-8 13H6z" fill="#fff" />
-							<path d="M6 20h32l8 8-8 8H6z" fill="#BBD9FF" />
-							<path d="M6 43h44l-8 13H6z" fill="#fff" />
-						</g>
+						<rect width="54" height="54" rx="15" fill="#1668E3" />
+						<!-- An arch, which can only be a door, and the step through it. -->
+						<path
+							d="M13 45 V26 a14 14 0 0 1 28 0 v19"
+							fill="none"
+							stroke="#fff"
+							stroke-width="5"
+							stroke-linecap="round"
+							opacity=".5"
+						/>
+						<path d="M19 30 h14" stroke="#fff" stroke-width="5.5" stroke-linecap="round" />
+						<path
+							d="M28 24 l7 6 -7 6"
+							fill="none"
+							stroke="#fff"
+							stroke-width="5.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
 					</svg>
 				</button>
 			</Dropdown>
 
 			<nav class="mt-6 flex flex-1 flex-col items-center gap-1">
 				<RailLink :to="{ name: 'home' }" icon="home" label="Overview" />
-				<RailLink :to="{ name: 'setup' }" icon="sliders" label="Setup" />
 				<RailLink
-					:to="{ name: 'company' }"
-					icon="briefcase"
-					label="Company"
+					:to="{ name: 'setup' }"
+					icon="sliders"
+					label="Setup"
 					:dot="overview.company_complete ? '' : 'todo'"
 				/>
 

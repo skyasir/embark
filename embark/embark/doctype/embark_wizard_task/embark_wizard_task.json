@@ -7,6 +7,7 @@
  "field_order": [
   "task_name",
   "sequence",
+  "stage",
   "icon",
   "column_break_1",
   "target_doctype",
@@ -31,6 +32,15 @@
    "fieldtype": "Int",
    "label": "Sequence",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "stage",
+   "fieldtype": "Select",
+   "label": "Stage",
+   "options": "Company\nModules\nSetup",
+   "default": "Setup",
+   "in_list_view": 1,
+   "description": "Which of the three stages of onboarding this step belongs to: the company's own details, the choice of modules, or the setup questions those modules call for."
   },
   {
    "fieldname": "icon",
@@ -81,7 +91,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-10-14 00:00:00.000000",
+ "modified": "2026-10-15 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Embark",
  "name": "Embark Wizard Task",
