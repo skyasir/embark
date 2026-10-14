@@ -196,9 +196,9 @@
 							{{ current.description }}
 						</p>
 
-						<div v-if="currentTask.doctype" class="mt-4 flex flex-wrap items-center gap-2">
+						<div v-if="current.doctype || currentTask.doctype" class="mt-4 flex flex-wrap items-center gap-2">
 							<span class="text-sm text-ink-gray-5">Doctype:</span>
-							<Badge theme="blue" size="sm" :label="currentTask.doctype" />
+							<Badge theme="blue" size="sm" :label="current.doctype || currentTask.doctype" />
 							<span v-if="current.field" class="font-mono text-sm text-ink-gray-5">{{ current.field }}</span>
 						</div>
 
@@ -253,7 +253,7 @@
 						</Button>
 						<div class="flex items-center gap-2">
 							<Button
-								v-if="currentTask.doctype && currentTask.answered === currentTask.total && isStaff"
+								v-if="writes(currentTask) && currentTask.answered === currentTask.total && isStaff"
 								size="sm"
 								variant="subtle"
 								icon-left="play"
@@ -343,9 +343,14 @@ const currentTask = computed(
 	() => (board.value?.tasks || []).find((t) => t.task === current.value?.task) || { questions: [] }
 )
 
+/** A step writes something if it, or any of its questions, names a record. */
+function writes(task) {
+	return Boolean(task?.doctype || (task?.questions || []).some((q) => q.doctype))
+}
+
 function canApply(key) {
 	const task = stageTasks(key)[0]
-	return isStaff.value && task?.doctype && task.answered === task.total
+	return isStaff.value && writes(task) && task.answered === task.total
 }
 
 async function load() {
@@ -392,7 +397,7 @@ watch(current, (q) => {
 })
 
 watch(currentTask, async (task) => {
-	if (!task?.task || !task.doctype || task.answered !== task.total || !isStaff.value) return
+	if (!task?.task || !writes(task) || task.answered !== task.total || !isStaff.value) return
 	try {
 		lastCheck.value = await api("wizard_check", { onboarding: state.id, task: task.task })
 	} catch {
