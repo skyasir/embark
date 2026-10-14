@@ -12,7 +12,7 @@ from unittest.mock import patch
 import frappe
 from openpyxl import Workbook, load_workbook
 
-from embark import api, assistant
+from embark import api, assistant, wizard
 from embark.conditions import applies
 from embark.engine import Column, build_columns, coerce, match_columns, split_header
 
@@ -1135,13 +1135,18 @@ class TestOnboardingFlow(TestCase):
 			self.skipTest("no company on this site yet")
 		self.answer_interview(tax_registered="yes", tax_rates="18")
 		company = frappe.get_all("Company", pluck="name", order_by="creation asc")[0]
+		abbr = frappe.db.get_value("Company", company, "abbr")
 
+		# On a site where this step has already run, the recipe plans nothing —
+		# which is the idempotence checked at the end of this test. What the
+		# site holds afterwards is the same either way, and that is the point.
+		fresh = not frappe.db.exists("Account", f"Output Tax 18% - {abbr}")
 		shown = api.configure_preview(self.onboarding.name, "tax_setup")["changes"]
-		self.assertTrue(shown, "nothing planned for the rate they charge")
+		if fresh:
+			self.assertTrue(shown, "nothing planned for the rate they charge")
 
 		api.configure_step(self.onboarding.name, "tax_setup")
 
-		abbr = frappe.db.get_value("Company", company, "abbr")
 		for side in ("Output", "Input"):
 			account = f"{side} Tax 18% - {abbr}"
 			self.assertTrue(frappe.db.exists("Account", account), account)
@@ -1172,3 +1177,173 @@ class TestOnboardingFlow(TestCase):
 
 		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
 		self.assertEqual(configure.plan_changes(doc, "tax_setup"), [])
+
+
+class TestSetupWizard(TestCase):
+	"""The wizard: three stages, questions that follow from the modules, and
+	steps that write real records.
+
+	bench --site <site> run-tests --module embark.tests.test_onboarding
+	"""
+
+	def setUp(self):
+		frappe.set_user("Administrator")
+		frappe.db.delete("Embark Onboarding")
+		self.onboarding = frappe.get_doc(
+			{"doctype": "Embark Onboarding", "client_name": "Sunrise Traders", "consultant": "Administrator"}
+		).insert()
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		frappe.db.rollback()
+
+	def board(self):
+		return wizard.board(frappe.get_doc("Embark Onboarding", self.onboarding.name))
+
+	def answer(self, key, value):
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		wizard.save_answer(doc, key, value)
+
+	def task(self, board, title):
+		return next((t for t in board["tasks"] if t["title"] == title), None)
+
+	def test_the_three_stages_are_in_order(self):
+		"""Who the company is, what it runs, then what that calls for."""
+		stages = [s["key"] for s in self.board()["stages"]]
+		self.assertEqual(stages, ["Company", "Modules", "Setup"])
+
+	def test_a_stage_counts_only_its_own_questions(self):
+		board = self.board()
+		for stage in board["stages"]:
+			mine = [t for t in board["tasks"] if t["stage"] == stage["key"]]
+			self.assertEqual(stage["total"], sum(t["total"] for t in mine), stage["key"])
+			self.assertEqual(stage["answered"], sum(t["answered"] for t in mine), stage["key"])
+
+	def test_the_modules_decide_what_is_asked(self):
+		"""The whole point of asking for modules second."""
+		self.answer("modules", "accounts")
+		without = self.board()
+		self.assertIsNone(self.task(without, "Set up warehouses"))
+
+		self.answer("modules", "accounts,stock")
+		with_stock = self.board()
+		self.assertIsNotNone(self.task(with_stock, "Set up warehouses"))
+		self.assertGreater(with_stock["total"], without["total"])
+
+	def test_dropping_a_module_hides_its_answers_but_keeps_them(self):
+		"""Going back is safe: the answers are still there if they return."""
+		self.answer("modules", "accounts,stock")
+		self.answer("additional_warehouse_name", "Main Store")
+		self.answer("modules", "accounts")
+		self.assertIsNone(self.task(self.board(), "Set up warehouses"))
+
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		kept = {row.question: row.value for row in doc.wizard_answers}
+		self.assertEqual(kept.get("additional_warehouse_name"), "Main Store")
+
+	def test_a_form_of_answers_is_saved_in_one_go(self):
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		wizard.save_answers(doc, {"company_name": "Sunrise Traders Pvt Ltd", "company_abbr": "STPL"})
+		kept = {row.question: row.value for row in doc.wizard_answers}
+		self.assertEqual(kept["company_name"], "Sunrise Traders Pvt Ltd")
+		self.assertEqual(kept["company_abbr"], "STPL")
+
+	def test_an_answer_to_a_question_that_does_not_exist_is_refused(self):
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		self.assertRaises(frappe.ValidationError, wizard.save_answers, doc, {"not_a_question": "x"})
+
+	def test_one_step_can_write_more_than_one_record(self):
+		"""A step is a topic, and a topic can reach several records."""
+		task = frappe.get_doc(
+			{
+				"doctype": "Embark Wizard Task",
+				"task_name": "Test step: two records",
+				"sequence": 999,
+				"stage": "Setup",
+				"description": "Test step.",
+			}
+		).insert(ignore_permissions=True)
+		for key, label, doctype, field, kind in (
+			("test_term_name", "What do you call it?", "Payment Term", "payment_term_name", "Text"),
+			("test_term_days", "How many days?", "Payment Term", "credit_days", "Number"),
+			("test_credit_limit", "How much credit?", "Company", "credit_limit", "Number"),
+		):
+			frappe.get_doc(
+				{
+					"doctype": "Embark Wizard Question",
+					"question_key": key,
+					"task": task.name,
+					"label": label,
+					"target_doctype": doctype,
+					"fieldname": field,
+					"answer_type": kind,
+					"sequence": 10,
+				}
+			).insert(ignore_permissions=True)
+
+		self.answer("test_term_name", "Net 30")
+		self.answer("test_term_days", "30")
+		self.answer("test_credit_limit", "500000")
+
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		plans = wizard._records(doc, task.name)
+		self.assertEqual(
+			sorted(p["doctype"] for p in plans), ["Company", "Payment Term"], "both records planned"
+		)
+		term = next(p for p in plans if p["doctype"] == "Payment Term")
+		self.assertEqual(term["values"]["payment_term_name"], "Net 30")
+		self.assertEqual(term["values"]["credit_days"], "30")
+
+		shown = wizard.check(doc, task.name)
+		self.assertTrue(shown["ready"])
+		self.assertEqual(len(shown["records"]), 2, shown["records"])
+		self.assertIn("Payment Term", shown["about_to"])
+		self.assertIn("Company", shown["about_to"])
+
+	def test_a_question_with_no_field_decides_rather_than_writes(self):
+		"""'Do you inspect goods?' is an answer, not a value to write."""
+		task = frappe.get_doc(
+			{
+				"doctype": "Embark Wizard Task",
+				"task_name": "Test step: a decision",
+				"sequence": 998,
+				"stage": "Setup",
+				"target_doctype": "Quality Inspection Template",
+				"description": "Test step.",
+			}
+		).insert(ignore_permissions=True)
+		frappe.get_doc(
+			{
+				"doctype": "Embark Wizard Question",
+				"question_key": "test_does_qi",
+				"task": task.name,
+				"label": "Do you inspect goods?",
+				"answer_type": "Yes / No",
+				"sequence": 10,
+			}
+		).insert(ignore_permissions=True)
+		frappe.get_doc(
+			{
+				"doctype": "Embark Wizard Question",
+				"question_key": "test_qi_template",
+				"task": task.name,
+				"label": "What is the checklist called?",
+				"fieldname": "quality_inspection_template_name",
+				"answer_type": "Text",
+				"applies_when": "test_does_qi == yes",
+				"sequence": 20,
+			}
+		).insert(ignore_permissions=True)
+
+		self.answer("test_does_qi", "No")
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		self.assertEqual(wizard._records(doc, task.name), [], "nothing to write, and nothing asked")
+
+		self.answer("test_does_qi", "Yes")
+		self.answer("test_qi_template", "Kraft Paper Incoming Check")
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		plans = wizard._records(doc, task.name)
+		self.assertEqual(len(plans), 1)
+		self.assertEqual(
+			plans[0]["values"], {"quality_inspection_template_name": "Kraft Paper Incoming Check"}
+		)

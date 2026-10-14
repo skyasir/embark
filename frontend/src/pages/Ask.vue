@@ -26,24 +26,11 @@
 		</section>
 
 		<section class="flex min-w-0 flex-1 flex-col">
-			<div class="mb-3 flex shrink-0 items-end justify-between gap-2">
-				<div>
-					<h2 class="text-base font-semibold text-ink-gray-8">ERPNext</h2>
-					<p class="text-sm text-ink-gray-5">This site, live. Anything Embark writes shows up here.</p>
-				</div>
-				<div class="flex shrink-0 rounded-md border border-outline-gray-2 p-0.5">
-					<button
-						v-for="place in places"
-						:key="place.path"
-						class="rounded px-2.5 py-1 text-sm transition-colors"
-						:class="path === place.path ? 'bg-surface-gray-3 text-ink-gray-9' : 'text-ink-gray-5 hover:text-ink-gray-8'"
-						@click="path = place.path"
-					>
-						{{ place.label }}
-					</button>
-				</div>
+			<div class="mb-3 shrink-0">
+				<h2 class="text-base font-semibold text-ink-gray-8">ERPNext</h2>
+				<p class="text-sm text-ink-gray-5">This site, live. Anything Embark writes shows up here.</p>
 			</div>
-			<ErpnextFrame :path="path" :height="frameHeight" />
+			<ErpnextFrame path="/app" :height="frameHeight" />
 		</section>
 	</div>
 
@@ -61,16 +48,7 @@ import { state } from "../data/store"
 
 const o = computed(() => state.overview)
 const aiOpen = ref(false)
-const path = ref("/app")
 const frameHeight = ref(600)
-
-// A few places worth reaching without leaving the conversation.
-const places = [
-	{ label: "Desk", path: "/app" },
-	{ label: "Company", path: "/app/company" },
-	{ label: "Items", path: "/app/item" },
-	{ label: "Customers", path: "/app/customer" },
-]
 
 /** The frame should reach the bottom of the window, whatever the window is. */
 function fit() {

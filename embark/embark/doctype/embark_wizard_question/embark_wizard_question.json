@@ -9,7 +9,9 @@
   "task",
   "sequence",
   "column_break_1",
+  "target_doctype",
   "fieldname",
+  "is_single",
   "answer_type",
   "options",
   "is_required",
@@ -46,6 +48,19 @@
    "fieldname": "column_break_1",
    "fieldtype": "Column Break",
    "label": "Column Break 1"
+  },
+  {
+   "fieldname": "target_doctype",
+   "fieldtype": "Link",
+   "label": "Creates / Configures",
+   "options": "DocType",
+   "description": "The ERPNext record this answer belongs to. Left blank it is the task's own, which is the usual case; a task that touches more than one record sets it per question."
+  },
+  {
+   "fieldname": "is_single",
+   "fieldtype": "Check",
+   "label": "Is a Settings Record",
+   "description": "On when this question's record is a Settings record that already exists and is only changed."
   },
   {
    "fieldname": "fieldname",
@@ -109,7 +124,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-10-14 00:00:00.000000",
+ "modified": "2026-10-15 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Embark",
  "name": "Embark Wizard Question",

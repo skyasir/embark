@@ -1,10 +1,13 @@
 """The setup wizard: one question at a time, each answer a field in ERPNext.
 
-This is the implementation itself, asked as questions. Every task names the
-record it produces — Company, System Settings, Fiscal Year, Warehouse — and
-every question under it fills one field of that record. Answer a task and
-Embark writes it, through the same change set everything else goes through, so
-it is previewed before and reversible after.
+This is the implementation itself, asked as questions. Every question names the
+record it belongs to — Company, System Settings, Fiscal Year, Warehouse — and
+the field of it that the answer fills; a question that says nothing takes the
+task's own record, which is the usual case. A step asked as one topic may well
+touch several records: credit terms are a Payment Term, a default on the
+Company and a role in Accounts Settings. Answer a task and Embark writes each
+of them, through the same change set everything else goes through, so it is
+previewed before and reversible after.
 
 Nothing here is a form that gets posted somewhere. A question knows which field
 it fills, which means the wizard can say what it is about to do, show the record
@@ -13,6 +16,9 @@ once it exists, and never ask for the same thing twice.
 
 from __future__ import annotations
 
+import json
+import pathlib
+
 import frappe
 from frappe import _
 
@@ -20,13 +26,28 @@ from embark.conditions import applies
 
 
 def Q(
-	key, task, label, description, *, field="", kind="Text", options="", example="", reqd=0, when="", seq=0
+	key,
+	task,
+	label,
+	description,
+	*,
+	field="",
+	kind="Text",
+	options="",
+	example="",
+	reqd=0,
+	when="",
+	seq=0,
+	doctype="",
+	single=0,
 ):
 	return {
 		"question_key": key,
 		"task": task,
 		"label": label,
 		"description": description,
+		"target_doctype": doctype,
+		"is_single": single,
 		"fieldname": field,
 		"answer_type": kind,
 		"options": options,
@@ -41,6 +62,7 @@ TASKS = [
 	{
 		"task_name": "Create a company",
 		"sequence": 10,
+		"stage": "Company",
 		"icon": "briefcase",
 		"target_doctype": "Company",
 		"description": "The business itself. Everything in ERPNext hangs off this record: your ledgers, your stock, your invoices.",
@@ -48,12 +70,14 @@ TASKS = [
 	{
 		"task_name": "Choose your modules",
 		"sequence": 15,
+		"stage": "Modules",
 		"icon": "grid",
 		"description": "Which parts of ERPNext this business will run. Everything after this step is decided by the answer — a module you leave out is never mentioned again.",
 	},
 	{
 		"task_name": "Set the system timezone",
 		"sequence": 20,
+		"stage": "Setup",
 		"icon": "globe",
 		"target_doctype": "System Settings",
 		"is_single": 1,
@@ -62,6 +86,7 @@ TASKS = [
 	{
 		"task_name": "Set date and number format",
 		"sequence": 30,
+		"stage": "Setup",
 		"icon": "calendar",
 		"target_doctype": "System Settings",
 		"is_single": 1,
@@ -70,6 +95,7 @@ TASKS = [
 	{
 		"task_name": "Set currency and float precision",
 		"sequence": 40,
+		"stage": "Setup",
 		"icon": "hash",
 		"target_doctype": "System Settings",
 		"is_single": 1,
@@ -78,6 +104,7 @@ TASKS = [
 	{
 		"task_name": "Create a fiscal year",
 		"sequence": 50,
+		"stage": "Setup",
 		"icon": "calendar",
 		"target_doctype": "Fiscal Year",
 		"description": "The twelve months your books are kept in. Nothing can be posted outside one.",
@@ -85,6 +112,7 @@ TASKS = [
 	{
 		"task_name": "Set company default accounts",
 		"sequence": 60,
+		"stage": "Setup",
 		"icon": "book",
 		"target_doctype": "Company",
 		"description": "Which ledger each kind of entry lands in, so nobody has to pick one on every document.",
@@ -93,6 +121,7 @@ TASKS = [
 	{
 		"task_name": "Create an item group",
 		"sequence": 70,
+		"stage": "Setup",
 		"icon": "layers",
 		"target_doctype": "Item Group",
 		"description": "How your products and services are grouped. Reports, taxes and defaults all follow these.",
@@ -101,6 +130,7 @@ TASKS = [
 	{
 		"task_name": "Create a customer group",
 		"sequence": 80,
+		"stage": "Setup",
 		"icon": "user-check",
 		"target_doctype": "Customer Group",
 		"description": "How your customers are grouped — wholesale, retail, government — for pricing and reporting.",
@@ -109,6 +139,7 @@ TASKS = [
 	{
 		"task_name": "Create a supplier group",
 		"sequence": 90,
+		"stage": "Setup",
 		"icon": "truck",
 		"target_doctype": "Supplier Group",
 		"description": "How your suppliers are grouped, for reporting and for default payment terms.",
@@ -117,6 +148,7 @@ TASKS = [
 	{
 		"task_name": "Create a territory",
 		"sequence": 100,
+		"stage": "Setup",
 		"icon": "map-pin",
 		"target_doctype": "Territory",
 		"description": "The places you sell into. Sales can then be read by region, and prices can differ by one.",
@@ -125,6 +157,7 @@ TASKS = [
 	{
 		"task_name": "Create a parent warehouse",
 		"sequence": 110,
+		"stage": "Setup",
 		"icon": "archive",
 		"target_doctype": "Warehouse",
 		"description": "A group warehouse that holds other warehouses — a city, a site, a building. Nothing is stocked in it directly.",
@@ -133,6 +166,7 @@ TASKS = [
 	{
 		"task_name": "Create a child warehouse",
 		"sequence": 120,
+		"stage": "Setup",
 		"icon": "archive",
 		"target_doctype": "Warehouse",
 		"description": "A place stock actually sits: a godown, a shop floor, a van.",
@@ -141,6 +175,7 @@ TASKS = [
 	{
 		"task_name": "Create a unit of measure",
 		"sequence": 130,
+		"stage": "Setup",
 		"icon": "hash",
 		"target_doctype": "UOM",
 		"description": "A unit you buy, sell or stock in that ERPNext does not already know.",
@@ -529,18 +564,179 @@ QUESTIONS = [
 ]
 
 
+# ── The authored question bank ────────────────────────────────────────────────
+#
+# The wording lives in embark/data/wizard_questions.json, not in this file: it
+# is content, written and rewritten by whoever knows the business, and it has
+# no business being a Python literal. This end only decides what each row
+# means — which stage it belongs to, which module has to be chosen for it to
+# be asked, and what it writes.
+
+CONTENT = pathlib.Path(__file__).parent / "data" / "wizard_questions.json"
+
+# An authored module, and the choice in step two that has to include it.
+MODULE_GATES = {
+	"Company Setup": "",
+	"Accounting": "modules == accounts",
+	"Stock": "modules == stock",
+	"Selling": "modules == selling,crm",
+	"Buying": "modules == buying",
+	"CRM": "modules == crm",
+	"Manufacturing": "modules == manufacturing",
+	"Projects": "modules == projects",
+	"HR": "modules == hr",
+	"Assets": "modules == assets",
+}
+
+# The company's own identity is stage one. Everything else it owns — its
+# address, the days it is closed — is setup like any other.
+COMPANY_STAGE = ("Create a company",)
+
+# A question that only decides, and the questions that decision opens up.
+# The file does not say this, because a list of questions cannot: it is the
+# sense of the two sitting next to each other.
+GATED_BY = {
+	"additional_warehouse_name": "has_multiple_stock_locations == yes",
+	"rejected_warehouse_name": "does_quality_inspection == yes",
+	"cost_center_name": "uses_branch_cost_centres == yes",
+	"quality_inspection_template_name": "does_quality_inspection == yes",
+	"action_if_qi_not_submitted": "does_quality_inspection == yes",
+	"price_list_name": "uses_multiple_price_lists == yes",
+	"backflush_based_on": "does_manufacturing == yes",
+	"material_consumption": "does_manufacturing == yes",
+	"overproduction_for_sales_order": "does_manufacturing == yes",
+	"overproduction_for_work_order": "does_manufacturing == yes",
+	"make_serial_batch_from_work_order": "does_manufacturing == yes",
+	"update_bom_costs_automatically": "does_manufacturing == yes",
+	"fetch_timesheet_in_invoice": "runs_projects == yes",
+	"ignore_employee_time_overlap": "runs_projects == yes",
+	"activity_type": "runs_projects == yes",
+	"activity_billing_rate": "runs_projects == yes",
+	"activity_costing_rate": "runs_projects == yes",
+	"tax_category_title": "is_gst_registered == yes",
+}
+
+# A step the question bank now covers in its own words. Switched off rather
+# than deleted, so a site that has answered one keeps the answer.
+SUPERSEDED = (
+	"Create a fiscal year",
+	"Create an item group",
+	"Create a customer group",
+	"Create a supplier group",
+	"Create a territory",
+	"Create a parent warehouse",
+	"Create a child warehouse",
+)
+
+ICONS = {
+	"Create a company": "briefcase",
+	"Add your company address": "map-pin",
+	"Set up holidays": "calendar",
+	"Set your go-live dates": "calendar",
+	"Set up your bank account": "credit-card",
+	"Set up credit terms": "clock",
+	"Set accounting rules": "book",
+	"Set up cost centres": "git-branch",
+	"Set up taxes": "percent",
+	"Set up warehouses": "archive",
+	"Set stock rules": "layers",
+	"Set up quality checks": "shield",
+	"Organise your products": "tag",
+	"Organise customers and sales team": "users",
+	"Set selling rules": "shopping-cart",
+	"Set buying rules": "truck",
+	"Set up enquiry tracking": "phone",
+	"Set production rules": "tool",
+	"Plan machine time": "clock",
+	"Set up projects": "clipboard",
+	"Set up your organisation": "users",
+}
+
+
+def _is_single(doctype: str) -> int:
+	"""Whether this record is a Settings record ERPNext already holds."""
+	if not doctype or not frappe.db.exists("DocType", doctype):
+		return 0
+	return 1 if frappe.get_meta(doctype).issingle else 0
+
+
+def authored() -> tuple[list[dict], list[dict]]:
+	"""The question bank, read as tasks and questions.
+
+	A task is a topic the bank groups under one heading. It takes its place in
+	the order from its module, and the module decides whether it is asked at
+	all.
+	"""
+	rows = json.loads(CONTENT.read_text())
+	order = list(MODULE_GATES)
+
+	tasks, questions, seen = [], [], {}
+	for row in rows:
+		module, task = row["module"], row["task"]
+		if task not in seen:
+			seen[task] = True
+			tasks.append(
+				{
+					"task_name": task,
+					"sequence": 1000 + order.index(module) * 100 + len(seen),
+					"stage": "Company" if task in COMPANY_STAGE else "Setup",
+					"icon": ICONS.get(task, "circle"),
+					"applies_when": MODULE_GATES.get(module, ""),
+					"description": _("The answers below set this up in ERPNext."),
+				}
+			)
+		questions.append(
+			{
+				"is_single": _is_single(row["target_doctype"]),
+				"question_key": row["question_key"],
+				"task": task,
+				"label": row["label"],
+				"description": row["description"],
+				"target_doctype": row["target_doctype"],
+				"fieldname": row["fieldname"],
+				"answer_type": row["answer_type"],
+				"options": row["options"],
+				"example": row["example"],
+				"is_required": row["is_required"],
+				"applies_when": GATED_BY.get(row["question_key"], ""),
+				"sequence": row["sequence"],
+			}
+		)
+	return tasks, questions
+
+
 # Fields a later version may add to a record seeded earlier. Only a blank is
 # filled, so a consultant's own edit is never overwritten.
-FILLED_IF_BLANK = ("applies_when", "description", "example", "options", "icon")
+FILLED_IF_BLANK = ("description", "example", "options", "icon")
 
 
 def seed():
-	"""Put the wizard's tasks and questions on the site, without overwriting edits."""
+	"""Put the wizard's tasks and questions on the site, without overwriting edits.
+
+	Two sources, in order: the steps this app has always asked, then the
+	question bank, which is the one people actually write. Where both ask the
+	same thing the bank wins, because it is the version somebody maintains.
+	"""
 	_seed("Embark Wizard Task", "task_name", TASKS)
 	_seed("Embark Wizard Question", "question_key", QUESTIONS)
 
+	bank_tasks, bank_questions = authored()
+	_seed("Embark Wizard Task", "task_name", bank_tasks, wording=True)
+	_seed("Embark Wizard Question", "question_key", bank_questions, wording=True)
 
-def _seed(doctype: str, key: str, rows: list[dict]) -> None:
+	# A step the bank now covers in its own words is switched off, not deleted,
+	# along with any question still sitting on it. A question the bank took
+	# over has already moved, so what is left here is what it did not want.
+	for task in SUPERSEDED:
+		if not frappe.db.exists("Embark Wizard Task", task):
+			continue
+		frappe.db.set_value("Embark Wizard Task", task, "is_active", 0)
+		for name in frappe.get_all("Embark Wizard Question", filters={"task": task}, pluck="name"):
+			frappe.db.set_value("Embark Wizard Question", name, "is_active", 0)
+
+
+def _seed(doctype: str, key: str, rows: list[dict], wording: bool = False) -> None:
+	"""Put rows on the site. `wording` marks a source that owns its own words."""
 	for row in rows:
 		if not frappe.db.exists(doctype, row[key]):
 			frappe.get_doc({"doctype": doctype, **row}).insert(ignore_permissions=True)
@@ -549,19 +745,43 @@ def _seed(doctype: str, key: str, rows: list[dict]) -> None:
 		doc = frappe.get_doc(doctype, row[key])
 		changed = False
 		for field in FILLED_IF_BLANK:
-			if row.get(field) and not doc.get(field):
+			# The question bank is written to be read, so its wording replaces
+			# whatever was there. Everything else only fills a blank.
+			if row.get(field) and (wording or not doc.get(field)) and doc.get(field) != row[field]:
 				doc.set(field, row[field])
 				changed = True
+		if wording and row.get("label") and doc.get("label") != row["label"]:
+			doc.set("label", row["label"])
+			changed = True
+		if wording and not doc.is_active:
+			doc.is_active = 1
+			changed = True
 
-		# What kind of answer a question takes, which field it fills and where it
-		# sits are structural — they are the engine, not the wording, and a later
-		# version that corrects them has to win or the wizard asks for a link
-		# where ERPNext wants a choice. The words stay as the site has them.
-		if doctype == "Embark Wizard Question":
-			for field in ("answer_type", "fieldname", "sequence"):
-				if row.get(field) is not None and doc.get(field) != row.get(field):
-					doc.set(field, row[field])
-					changed = True
+		# What kind of answer a question takes, which field it fills, where it
+		# sits and when it is asked at all are structural — they are the engine,
+		# not the wording, and a later version that corrects them has to win or
+		# the wizard asks for a link where ERPNext wants a choice, or gates a
+		# step on a question that no longer exists. The words stay as the site
+		# has them.
+		structural = {
+			"Embark Wizard Question": (
+				"answer_type",
+				"fieldname",
+				"sequence",
+				"applies_when",
+				"target_doctype",
+				# Which step asks it is structural: when the question bank
+				# regroups a question under a new heading, it has to move, or
+				# it is left behind on a step nobody sees any more.
+				"task",
+				"is_single",
+			),
+			"Embark Wizard Task": ("sequence", "stage", "applies_when"),
+		}.get(doctype, ())
+		for field in structural:
+			if row.get(field) is not None and doc.get(field) != row.get(field):
+				doc.set(field, row[field])
+				changed = True
 
 		if changed:
 			doc.save(ignore_permissions=True)
@@ -584,6 +804,7 @@ def board(doc) -> dict:
 			"name",
 			"task_name",
 			"sequence",
+			"stage",
 			"icon",
 			"target_doctype",
 			"is_single",
@@ -609,11 +830,14 @@ def board(doc) -> dict:
 				"options",
 				"is_required",
 				"applies_when",
+				"target_doctype",
 			],
 			order_by="sequence asc",
 		):
 			if not applies(q.applies_when, answers):
 				continue
+			# Its own record if it names one, otherwise the task's.
+			target = q.target_doctype or task.target_doctype
 			questions.append(
 				{
 					"key": q.name,
@@ -621,9 +845,10 @@ def board(doc) -> dict:
 					"description": q.description,
 					"example": q.example,
 					"field": q.fieldname,
+					"doctype": target,
 					"type": q.answer_type,
-					"choices": choices(q, task.target_doctype),
-					"link_doctype": _link_doctype(q, task.target_doctype),
+					"choices": choices(q, target),
+					"link_doctype": _link_doctype(q, target),
 					"required": bool(q.is_required),
 					"answer": answers.get(q.name, ""),
 				}
@@ -638,6 +863,7 @@ def board(doc) -> dict:
 			{
 				"task": task.name,
 				"title": task.task_name,
+				"stage": task.stage or "Setup",
 				"icon": task.icon,
 				"doctype": task.target_doctype,
 				"is_single": bool(task.is_single),
@@ -653,10 +879,48 @@ def board(doc) -> dict:
 
 	return {
 		"tasks": tasks,
+		"stages": _stages(tasks),
 		"answered": answered,
 		"total": total,
 		"percent": round(100 * answered / total) if total else 0,
 	}
+
+
+# Onboarding in three stages: who the company is, which parts of ERPNext it
+# runs, and then only the setup those parts call for. The third stage is
+# shorter for having asked the second, which is the point of the order.
+STAGES = (
+	("Company", _("Company details"), _("Who the business is, as it is registered.")),
+	("Modules", _("Modules"), _("Which parts of ERPNext this business will run.")),
+	("Setup", _("Setup questions"), _("Only what the modules you chose actually need.")),
+)
+
+
+def _stages(tasks: list[dict]) -> list[dict]:
+	"""Each stage, with how much of it is answered.
+
+	A stage with no task of its own is left out rather than shown empty — the
+	wizard is configuration, and a site may have been given its own.
+	"""
+	out = []
+	for key, title, description in STAGES:
+		mine = [task for task in tasks if task["stage"] == key]
+		if not mine:
+			continue
+		answered = sum(task["answered"] for task in mine)
+		total = sum(task["total"] for task in mine)
+		out.append(
+			{
+				"key": key,
+				"title": title,
+				"description": description,
+				"tasks": len(mine),
+				"answered": answered,
+				"total": total,
+				"done": bool(total) and answered == total,
+			}
+		)
+	return out
 
 
 def choices(question, target_doctype: str | None) -> list[dict]:
@@ -722,47 +986,84 @@ def save_answer(doc, question: str, value: str) -> None:
 	doc.save(ignore_permissions=True)
 
 
+def save_answers(doc, answers: dict) -> None:
+	"""Several answers at once, saved in one write.
+
+	The company's own details are a form, not an interview — a name, a country,
+	a currency — so they arrive together and are kept together.
+	"""
+	known = set(
+		frappe.get_all("Embark Wizard Question", filters={"name": ("in", list(answers))}, pluck="name")
+	)
+	unknown = set(answers) - known
+	if unknown:
+		frappe.throw(_("{0} is not one of the wizard's questions.").format(sorted(unknown)[0]))
+
+	rows = {row.question: row for row in doc.wizard_answers}
+	for question, value in answers.items():
+		if question in rows:
+			rows[question].value = value
+		else:
+			doc.append("wizard_answers", {"question": question, "value": value})
+	doc.save(ignore_permissions=True)
+
+
 def check(doc, task: str) -> dict:
 	"""What applying this task would do to ERPNext, and whether that is safe."""
-	plan = _record(doc, task)
-	if not plan:
-		return {"about_to": "", "safe_because": [], "fields": [], "ready": False}
+	plans = _records(doc, task)
+	if not plans:
+		return {"about_to": "", "safe_because": [], "fields": [], "records": [], "ready": False}
 
-	meta = frappe.get_meta(plan["doctype"])
 	safe = [
 		_("Every field below comes from an answer you gave — nothing is invented."),
 		_("The record is written through a change set, copied first, so it can be put back."),
 	]
-	if meta.is_submittable:
-		safe.append(
-			_("{0} can be submitted. It is left as a draft for you to check.").format(plan["doctype"])
-		)
-	else:
-		safe.append(
-			_("{0} is not a document that gets submitted — it is a setting or a list.").format(
-				plan["doctype"]
+	for plan in plans:
+		meta = frappe.get_meta(plan["doctype"])
+		if meta.is_submittable:
+			safe.append(
+				_("{0} can be submitted. It is left as a draft for you to check.").format(plan["doctype"])
 			)
-		)
+		else:
+			safe.append(
+				_("{0} is not a document that gets submitted — it is a setting or a list.").format(
+					plan["doctype"]
+				)
+			)
 
-	return {
-		"about_to": _("Embark is about to {0} {1} in ERPNext.").format(
-			_("update") if plan["exists"] else _("create"), plan["doctype"]
-		),
-		"safe_because": safe,
-		"fields": [
+	records, fields = [], []
+	for plan in plans:
+		meta = frappe.get_meta(plan["doctype"])
+		shown = [
 			{"field": _(meta.get_field(f).label) if meta.get_field(f) else f, "value": v}
 			for f, v in plan["values"].items()
-		],
+		]
+		records.append(
+			{
+				"doctype": plan["doctype"],
+				"action": _("update") if plan["exists"] else _("create"),
+				"fields": shown,
+			}
+		)
+		fields.extend(shown)
+
+	# "create a Payment Term and update Company", in the order they are written.
+	doing = _(", ").join(f"{r['action']} {r['doctype']}" for r in records)
+	return {
+		"about_to": _("Embark is about to {0} in ERPNext.").format(doing),
+		"safe_because": safe,
+		"records": records,
+		"fields": fields,
 		"ready": True,
 	}
 
 
 def apply(doc, task: str) -> dict:
-	"""Write the task's record, and hand back what ERPNext now holds."""
+	"""Write the task's records, and hand back what ERPNext now holds."""
 	import json
 
-	plan = _record(doc, task)
-	if not plan:
+	plans = _records(doc, task)
+	if not plans:
 		frappe.throw(_("Answer this step's questions first."))
 
 	change_set = frappe.get_doc(
@@ -778,13 +1079,21 @@ def apply(doc, task: str) -> dict:
 					"summary": task,
 					"payload": json.dumps(plan["values"], default=str),
 				}
+				for plan in plans
 			],
 		}
 	).insert(ignore_permissions=True)
 	change_set.apply()
 
-	name = change_set.changes[0].ref_name
-	return {"task": task, "change_set": change_set.name, "record": result(plan["doctype"], name)}
+	made = [result(change.ref_doctype, change.ref_name) for change in change_set.changes if change.ref_name]
+	return {
+		"task": task,
+		"change_set": change_set.name,
+		# The first is what the screen shows; a step that wrote several hands
+		# back all of them.
+		"record": made[0] if made else None,
+		"records": made,
+	}
 
 
 def result(doctype: str, name: str) -> dict:
@@ -819,7 +1128,7 @@ def state(doc) -> dict:
 	Read back from the records themselves, not from what Embark remembers doing,
 	so a record somebody changed by hand in the desk shows their change.
 	"""
-	made = {}
+	made: dict[str, list] = {}
 	for row in frappe.get_all(
 		"Embark Change Set",
 		filters={"status": "Applied"},
@@ -830,16 +1139,19 @@ def state(doc) -> dict:
 			"Embark Change", filters={"parent": row.name}, fields=["ref_doctype", "ref_name", "summary"]
 		):
 			if change.ref_name and frappe.db.exists(change.ref_doctype, change.ref_name):
-				made[change.summary] = (change.ref_doctype, change.ref_name)
+				here = made.setdefault(change.summary, [])
+				if (change.ref_doctype, change.ref_name) not in here:
+					here.append((change.ref_doctype, change.ref_name))
 
 	board_now = board(doc)
 	tasks = []
 	for task in board_now["tasks"]:
-		built = made.get(task["task"])
+		built = made.get(task["task"]) or []
 		tasks.append(
 			{
 				**{k: task[k] for k in ("task", "title", "icon", "doctype", "answered", "total", "state")},
-				"record": result(*built) if built else None,
+				"record": result(*built[0]) if built else None,
+				"records": [result(*one) for one in built],
 			}
 		)
 
@@ -852,37 +1164,57 @@ def state(doc) -> dict:
 	}
 
 
-def _record(doc, task: str) -> dict | None:
-	"""What this task's answers add up to: a doctype, a name, and the fields."""
-	task_doc = frappe.get_cached_doc("Embark Wizard Task", task)
-	if not task_doc.target_doctype:
-		return None
+def _records(doc, task: str) -> list[dict]:
+	"""What this task's answers add up to: a record per doctype they fill.
 
+	A step is a topic, and a topic can reach more than one record — credit
+	terms are a Payment Term, a default on the Company and a role in Accounts
+	Settings. Each answer says which record it belongs to, so they are grouped
+	by that and written together.
+	"""
+	task_doc = frappe.get_cached_doc("Embark Wizard Task", task)
 	answers = {row.question: row.value for row in doc.wizard_answers}
-	values, missing = {}, []
+
+	# Doctype -> {field: value}, in the order the questions ask for them.
+	wanted: dict[tuple[str, bool], dict] = {}
+	missing = []
 	for q in frappe.get_all(
 		"Embark Wizard Question",
 		filters={"task": task, "is_active": 1},
-		fields=["name", "fieldname", "answer_type", "is_required"],
+		fields=["name", "fieldname", "answer_type", "is_required", "target_doctype", "is_single", "applies_when"],
 		order_by="sequence asc",
 	):
+		if not applies(q.applies_when, answers):
+			continue
 		value = (answers.get(q.name) or "").strip()
 		if not value:
 			if q.is_required:
 				missing.append(q.name)
 			continue
-		if q.fieldname:
-			values[q.fieldname] = (
-				1
-				if q.answer_type == "Yes / No" and value.lower() in ("yes", "1", "true")
-				else (0 if q.answer_type == "Yes / No" else value)
-			)
+		# A question with no field of its own decides whether later questions
+		# are asked. It is an answer, not a value to write.
+		if not q.fieldname:
+			continue
+		doctype = q.target_doctype or task_doc.target_doctype
+		if not doctype:
+			continue
+		single = bool(q.is_single if q.target_doctype else task_doc.is_single)
+		values = wanted.setdefault((doctype, single), {})
+		values[q.fieldname] = (
+			1
+			if q.answer_type == "Yes / No" and value.lower() in ("yes", "1", "true")
+			else (0 if q.answer_type == "Yes / No" else value)
+		)
 
-	if missing or not values:
-		return None
+	if missing:
+		return []
 
-	doctype = task_doc.target_doctype
-	if task_doc.is_single:
+	return [_plan(doc, doctype, single, values) for (doctype, single), values in wanted.items() if values]
+
+
+def _plan(doc, doctype: str, single: bool, values: dict) -> dict:
+	"""One record: where it goes, whether it is already there, and its fields."""
+	if single:
 		return {"doctype": doctype, "name": doctype, "values": values, "exists": True}
 
 	# A record that is already there is updated, not made twice.

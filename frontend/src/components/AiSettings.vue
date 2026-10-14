@@ -6,9 +6,14 @@
 			</div>
 			<div v-else class="ft-fill space-y-4">
 				<p class="text-base leading-relaxed text-ink-gray-6">
-					The chat fills in the interview for a customer who would rather describe their business than
-					click through the questions. It can do nothing else: it never writes to ERPNext, and the plan
-					is still worked out from the answers.
+					What the chat can do depends on who is talking to it. A customer's chat answers their own
+					questions, reads the sheets they send and hands the lot over for review — it never writes to
+					ERPNext.
+				</p>
+				<p class="text-base leading-relaxed text-ink-gray-6">
+					Yours does write: it creates the records once the data is approved, and it can change the
+					site itself — a field, a naming rule, a report. Every change goes through a change set, so
+					you see what it is about to do before it does it, and you can put it back afterwards.
 				</p>
 
 				<FormControl
