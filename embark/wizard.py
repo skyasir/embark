@@ -1,10 +1,13 @@
 """The setup wizard: one question at a time, each answer a field in ERPNext.
 
-This is the implementation itself, asked as questions. Every task names the
-record it produces — Company, System Settings, Fiscal Year, Warehouse — and
-every question under it fills one field of that record. Answer a task and
-Embark writes it, through the same change set everything else goes through, so
-it is previewed before and reversible after.
+This is the implementation itself, asked as questions. Every question names the
+record it belongs to — Company, System Settings, Fiscal Year, Warehouse — and
+the field of it that the answer fills; a question that says nothing takes the
+task's own record, which is the usual case. A step asked as one topic may well
+touch several records: credit terms are a Payment Term, a default on the
+Company and a role in Accounts Settings. Answer a task and Embark writes each
+of them, through the same change set everything else goes through, so it is
+previewed before and reversible after.
 
 Nothing here is a form that gets posted somewhere. A question knows which field
 it fills, which means the wizard can say what it is about to do, show the record
@@ -20,13 +23,28 @@ from embark.conditions import applies
 
 
 def Q(
-	key, task, label, description, *, field="", kind="Text", options="", example="", reqd=0, when="", seq=0
+	key,
+	task,
+	label,
+	description,
+	*,
+	field="",
+	kind="Text",
+	options="",
+	example="",
+	reqd=0,
+	when="",
+	seq=0,
+	doctype="",
+	single=0,
 ):
 	return {
 		"question_key": key,
 		"task": task,
 		"label": label,
 		"description": description,
+		"target_doctype": doctype,
+		"is_single": single,
 		"fieldname": field,
 		"answer_type": kind,
 		"options": options,
@@ -574,7 +592,7 @@ def _seed(doctype: str, key: str, rows: list[dict]) -> None:
 		# step on a question that no longer exists. The words stay as the site
 		# has them.
 		structural = {
-			"Embark Wizard Question": ("answer_type", "fieldname", "sequence", "applies_when"),
+			"Embark Wizard Question": ("answer_type", "fieldname", "sequence", "applies_when", "target_doctype"),
 			"Embark Wizard Task": ("sequence", "stage", "applies_when"),
 		}.get(doctype, ())
 		for field in structural:
@@ -629,11 +647,14 @@ def board(doc) -> dict:
 				"options",
 				"is_required",
 				"applies_when",
+				"target_doctype",
 			],
 			order_by="sequence asc",
 		):
 			if not applies(q.applies_when, answers):
 				continue
+			# Its own record if it names one, otherwise the task's.
+			target = q.target_doctype or task.target_doctype
 			questions.append(
 				{
 					"key": q.name,
@@ -641,9 +662,10 @@ def board(doc) -> dict:
 					"description": q.description,
 					"example": q.example,
 					"field": q.fieldname,
+					"doctype": target,
 					"type": q.answer_type,
-					"choices": choices(q, task.target_doctype),
-					"link_doctype": _link_doctype(q, task.target_doctype),
+					"choices": choices(q, target),
+					"link_doctype": _link_doctype(q, target),
 					"required": bool(q.is_required),
 					"answer": answers.get(q.name, ""),
 				}
@@ -805,45 +827,60 @@ def save_answers(doc, answers: dict) -> None:
 
 def check(doc, task: str) -> dict:
 	"""What applying this task would do to ERPNext, and whether that is safe."""
-	plan = _record(doc, task)
-	if not plan:
-		return {"about_to": "", "safe_because": [], "fields": [], "ready": False}
+	plans = _records(doc, task)
+	if not plans:
+		return {"about_to": "", "safe_because": [], "fields": [], "records": [], "ready": False}
 
-	meta = frappe.get_meta(plan["doctype"])
 	safe = [
 		_("Every field below comes from an answer you gave — nothing is invented."),
 		_("The record is written through a change set, copied first, so it can be put back."),
 	]
-	if meta.is_submittable:
-		safe.append(
-			_("{0} can be submitted. It is left as a draft for you to check.").format(plan["doctype"])
-		)
-	else:
-		safe.append(
-			_("{0} is not a document that gets submitted — it is a setting or a list.").format(
-				plan["doctype"]
+	for plan in plans:
+		meta = frappe.get_meta(plan["doctype"])
+		if meta.is_submittable:
+			safe.append(
+				_("{0} can be submitted. It is left as a draft for you to check.").format(plan["doctype"])
 			)
-		)
+		else:
+			safe.append(
+				_("{0} is not a document that gets submitted — it is a setting or a list.").format(
+					plan["doctype"]
+				)
+			)
 
-	return {
-		"about_to": _("Embark is about to {0} {1} in ERPNext.").format(
-			_("update") if plan["exists"] else _("create"), plan["doctype"]
-		),
-		"safe_because": safe,
-		"fields": [
+	records, fields = [], []
+	for plan in plans:
+		meta = frappe.get_meta(plan["doctype"])
+		shown = [
 			{"field": _(meta.get_field(f).label) if meta.get_field(f) else f, "value": v}
 			for f, v in plan["values"].items()
-		],
+		]
+		records.append(
+			{
+				"doctype": plan["doctype"],
+				"action": _("update") if plan["exists"] else _("create"),
+				"fields": shown,
+			}
+		)
+		fields.extend(shown)
+
+	# "create a Payment Term and update Company", in the order they are written.
+	doing = _(", ").join(f"{r['action']} {r['doctype']}" for r in records)
+	return {
+		"about_to": _("Embark is about to {0} in ERPNext.").format(doing),
+		"safe_because": safe,
+		"records": records,
+		"fields": fields,
 		"ready": True,
 	}
 
 
 def apply(doc, task: str) -> dict:
-	"""Write the task's record, and hand back what ERPNext now holds."""
+	"""Write the task's records, and hand back what ERPNext now holds."""
 	import json
 
-	plan = _record(doc, task)
-	if not plan:
+	plans = _records(doc, task)
+	if not plans:
 		frappe.throw(_("Answer this step's questions first."))
 
 	change_set = frappe.get_doc(
@@ -859,13 +896,21 @@ def apply(doc, task: str) -> dict:
 					"summary": task,
 					"payload": json.dumps(plan["values"], default=str),
 				}
+				for plan in plans
 			],
 		}
 	).insert(ignore_permissions=True)
 	change_set.apply()
 
-	name = change_set.changes[0].ref_name
-	return {"task": task, "change_set": change_set.name, "record": result(plan["doctype"], name)}
+	made = [result(change.ref_doctype, change.ref_name) for change in change_set.changes if change.ref_name]
+	return {
+		"task": task,
+		"change_set": change_set.name,
+		# The first is what the screen shows; a step that wrote several hands
+		# back all of them.
+		"record": made[0] if made else None,
+		"records": made,
+	}
 
 
 def result(doctype: str, name: str) -> dict:
@@ -900,7 +945,7 @@ def state(doc) -> dict:
 	Read back from the records themselves, not from what Embark remembers doing,
 	so a record somebody changed by hand in the desk shows their change.
 	"""
-	made = {}
+	made: dict[str, list] = {}
 	for row in frappe.get_all(
 		"Embark Change Set",
 		filters={"status": "Applied"},
@@ -911,16 +956,19 @@ def state(doc) -> dict:
 			"Embark Change", filters={"parent": row.name}, fields=["ref_doctype", "ref_name", "summary"]
 		):
 			if change.ref_name and frappe.db.exists(change.ref_doctype, change.ref_name):
-				made[change.summary] = (change.ref_doctype, change.ref_name)
+				here = made.setdefault(change.summary, [])
+				if (change.ref_doctype, change.ref_name) not in here:
+					here.append((change.ref_doctype, change.ref_name))
 
 	board_now = board(doc)
 	tasks = []
 	for task in board_now["tasks"]:
-		built = made.get(task["task"])
+		built = made.get(task["task"]) or []
 		tasks.append(
 			{
 				**{k: task[k] for k in ("task", "title", "icon", "doctype", "answered", "total", "state")},
-				"record": result(*built) if built else None,
+				"record": result(*built[0]) if built else None,
+				"records": [result(*one) for one in built],
 			}
 		)
 
@@ -933,37 +981,57 @@ def state(doc) -> dict:
 	}
 
 
-def _record(doc, task: str) -> dict | None:
-	"""What this task's answers add up to: a doctype, a name, and the fields."""
-	task_doc = frappe.get_cached_doc("Embark Wizard Task", task)
-	if not task_doc.target_doctype:
-		return None
+def _records(doc, task: str) -> list[dict]:
+	"""What this task's answers add up to: a record per doctype they fill.
 
+	A step is a topic, and a topic can reach more than one record — credit
+	terms are a Payment Term, a default on the Company and a role in Accounts
+	Settings. Each answer says which record it belongs to, so they are grouped
+	by that and written together.
+	"""
+	task_doc = frappe.get_cached_doc("Embark Wizard Task", task)
 	answers = {row.question: row.value for row in doc.wizard_answers}
-	values, missing = {}, []
+
+	# Doctype -> {field: value}, in the order the questions ask for them.
+	wanted: dict[tuple[str, bool], dict] = {}
+	missing = []
 	for q in frappe.get_all(
 		"Embark Wizard Question",
 		filters={"task": task, "is_active": 1},
-		fields=["name", "fieldname", "answer_type", "is_required"],
+		fields=["name", "fieldname", "answer_type", "is_required", "target_doctype", "is_single", "applies_when"],
 		order_by="sequence asc",
 	):
+		if not applies(q.applies_when, answers):
+			continue
 		value = (answers.get(q.name) or "").strip()
 		if not value:
 			if q.is_required:
 				missing.append(q.name)
 			continue
-		if q.fieldname:
-			values[q.fieldname] = (
-				1
-				if q.answer_type == "Yes / No" and value.lower() in ("yes", "1", "true")
-				else (0 if q.answer_type == "Yes / No" else value)
-			)
+		# A question with no field of its own decides whether later questions
+		# are asked. It is an answer, not a value to write.
+		if not q.fieldname:
+			continue
+		doctype = q.target_doctype or task_doc.target_doctype
+		if not doctype:
+			continue
+		single = bool(q.is_single if q.target_doctype else task_doc.is_single)
+		values = wanted.setdefault((doctype, single), {})
+		values[q.fieldname] = (
+			1
+			if q.answer_type == "Yes / No" and value.lower() in ("yes", "1", "true")
+			else (0 if q.answer_type == "Yes / No" else value)
+		)
 
-	if missing or not values:
-		return None
+	if missing:
+		return []
 
-	doctype = task_doc.target_doctype
-	if task_doc.is_single:
+	return [_plan(doc, doctype, single, values) for (doctype, single), values in wanted.items() if values]
+
+
+def _plan(doc, doctype: str, single: bool, values: dict) -> dict:
+	"""One record: where it goes, whether it is already there, and its fields."""
+	if single:
 		return {"doctype": doctype, "name": doctype, "values": values, "exists": True}
 
 	# A record that is already there is updated, not made twice.
