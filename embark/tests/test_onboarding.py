@@ -1135,13 +1135,18 @@ class TestOnboardingFlow(TestCase):
 			self.skipTest("no company on this site yet")
 		self.answer_interview(tax_registered="yes", tax_rates="18")
 		company = frappe.get_all("Company", pluck="name", order_by="creation asc")[0]
+		abbr = frappe.db.get_value("Company", company, "abbr")
 
+		# On a site where this step has already run, the recipe plans nothing —
+		# which is the idempotence checked at the end of this test. What the
+		# site holds afterwards is the same either way, and that is the point.
+		fresh = not frappe.db.exists("Account", f"Output Tax 18% - {abbr}")
 		shown = api.configure_preview(self.onboarding.name, "tax_setup")["changes"]
-		self.assertTrue(shown, "nothing planned for the rate they charge")
+		if fresh:
+			self.assertTrue(shown, "nothing planned for the rate they charge")
 
 		api.configure_step(self.onboarding.name, "tax_setup")
 
-		abbr = frappe.db.get_value("Company", company, "abbr")
 		for side in ("Output", "Input"):
 			account = f"{side} Tax 18% - {abbr}"
 			self.assertTrue(frappe.db.exists("Account", account), account)

@@ -22,11 +22,10 @@
 
 			<nav class="mt-6 flex flex-1 flex-col items-center gap-1">
 				<RailLink :to="{ name: 'home' }" icon="home" label="Overview" />
-				<RailLink :to="{ name: 'setup' }" icon="sliders" label="Setup" />
 				<RailLink
-					:to="{ name: 'company' }"
-					icon="briefcase"
-					label="Company"
+					:to="{ name: 'setup' }"
+					icon="sliders"
+					label="Setup"
 					:dot="overview.company_complete ? '' : 'todo'"
 				/>
 
