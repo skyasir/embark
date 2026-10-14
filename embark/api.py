@@ -680,12 +680,21 @@ def wizard_answers(answers: str, onboarding: str | None = None) -> dict:
 	return wizard_engine.board(doc)
 
 
+# A list the customer picks from has to hold the answer they want. Country has
+# 250 rows and Currency 190, so a window of the most recent few would hide most
+# of them; a list this size costs nothing to send whole. Only a table big
+# enough to be a search in its own right is cut, and then to the newest.
+WHOLE_LIST_UNDER = 500
+
+
 @frappe.whitelist()
-def suggestions(doctype: str, limit: int = 50) -> list[str]:
+def suggestions(doctype: str, limit: int = 100) -> list[str]:
 	"""What this site already has of a kind, for a question that links to one."""
 	_get_onboarding(None)  # a question is only asked inside an onboarding
 	if not frappe.db.exists("DocType", doctype):
 		return []
+	if frappe.db.count(doctype) < WHOLE_LIST_UNDER:
+		return frappe.get_all(doctype, pluck="name", limit=0, order_by="name asc")
 	return frappe.get_all(doctype, pluck="name", limit=limit, order_by="modified desc")
 
 
