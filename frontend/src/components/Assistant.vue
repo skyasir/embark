@@ -1,155 +1,148 @@
 <template>
-	<div v-if="o?.assistant && state.chatOpen" class="contents">
-		<!-- A column beside the sidebar, not a floating box: the checklist stays
-		     visible while the customer talks. -->
-		<aside
-			class="fixed inset-0 z-10 flex flex-col border-r border-outline-gray-1 bg-surface-white sm:static sm:z-0 sm:w-[360px] sm:shrink-0"
-		>
-			<header class="flex h-12 shrink-0 items-center gap-2 border-b border-outline-gray-1 px-4">
-				<FeatherIcon name="message-circle" class="size-4 text-ink-gray-6" />
-				<span class="flex-1 text-base font-medium text-ink-gray-9">Ask Embark</span>
-				<Button variant="ghost" icon="x" label="Close" @click="state.chatOpen = false" />
-			</header>
+	<!-- A column of its own, beside the site it is changing: what the customer
+	     says and what Embark did about it, in one scroll. -->
+	<div
+		v-if="o?.assistant"
+		class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-outline-gray-2 bg-surface-white"
+	>
+		<div ref="scroller" class="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+			<div v-if="!messages.length" class="space-y-3">
+				<p class="text-base leading-relaxed text-ink-gray-8">{{ opening.greeting }}</p>
+				<button
+					v-for="example in opening.suggestions"
+					:key="example"
+					class="block w-full rounded-lg border border-outline-gray-2 px-3 py-2 text-left text-base text-ink-gray-7 hover:bg-surface-gray-1"
+					@click="send(example)"
+				>
+					{{ example }}
+				</button>
+			</div>
 
-			<div ref="scroller" class="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-				<div v-if="!messages.length" class="space-y-3">
-					<p class="text-base leading-relaxed text-ink-gray-8">{{ opening.greeting }}</p>
-					<button
-						v-for="example in opening.suggestions"
-						:key="example"
-						class="block w-full rounded-lg border border-outline-gray-2 px-3 py-2 text-left text-base text-ink-gray-7 hover:bg-surface-gray-1"
-						@click="send(example)"
-					>
-						{{ example }}
+			<div v-for="(m, i) in messages" :key="i" class="text-base leading-relaxed">
+				<div v-if="m.role === 'user'" class="ml-8 rounded-lg bg-surface-gray-2 px-3 py-2 text-ink-gray-8">
+					{{ m.content }}
+				</div>
+
+				<!-- What it did on the way: one row per tool call, openable. -->
+				<details v-else-if="m.role === 'step'" class="rounded-lg border border-outline-gray-2">
+					<summary class="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm text-ink-gray-7">
+						<FeatherIcon
+							:name="m.step.failed ? 'alert-circle' : 'check'"
+							class="size-3.5 shrink-0"
+							:class="m.step.failed ? 'text-ink-red-3' : 'text-ink-green-3'"
+						/>
+						<span class="flex-1 truncate">{{ m.step.label || m.step.tool }}</span>
+					</summary>
+					<pre class="overflow-x-auto whitespace-pre-wrap border-t border-outline-gray-1 px-3 py-2 text-sm text-ink-gray-6">{{ detail(m.step) }}</pre>
+				</details>
+
+				<!-- A change to this site: nothing happens until it is applied. -->
+				<div v-else-if="m.role === 'change'" class="rounded-lg border border-outline-gray-2">
+					<div class="flex items-center gap-2 border-b border-outline-gray-1 bg-surface-gray-1 px-3 py-2">
+						<span class="flex-1 truncate text-sm font-medium text-ink-gray-8">{{ m.set.title }}</span>
+						<Badge :theme="m.set.status === 'Applied' ? 'green' : 'gray'" :label="m.set.status" size="sm" />
+					</div>
+					<ul class="list-disc space-y-1 px-3 py-2 pl-7 text-sm text-ink-gray-7">
+						<li v-for="(c, j) in m.set.changes" :key="j">{{ c.summary }}</li>
+					</ul>
+
+					<!-- What it means, before and after, without touching the site. -->
+					<div v-if="m.preview" class="border-t border-outline-gray-1 px-3 py-2">
+						<div v-for="(p, j) in m.preview" :key="j" class="mb-2 last:mb-0">
+							<div class="text-sm font-medium text-ink-gray-7">
+								{{ p.action }} · {{ p.doctype }}
+							</div>
+							<table class="mt-1 w-full text-sm">
+								<tbody>
+									<tr v-for="(line, k) in p.lines" :key="k" class="align-top">
+										<td class="py-0.5 pr-2 text-ink-gray-5">{{ line.field }}</td>
+										<td class="py-0.5 pr-2 text-ink-gray-5 line-through" :class="line.before ? '' : 'opacity-40'">
+											{{ line.before || "—" }}
+										</td>
+										<td class="py-0.5 text-ink-gray-8">{{ line.after || "—" }}</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</div>
+
+					<div class="flex gap-2 border-t border-outline-gray-1 px-3 py-2">
+						<Button size="sm" variant="ghost" :loading="m.loading" @click="showPreview(m)">
+							{{ m.preview ? "Hide" : "What changed" }}
+						</Button>
+					</div>
+				</div>
+
+				<div v-else class="mr-4 whitespace-pre-line text-ink-gray-8">{{ m.content }}</div>
+			</div>
+
+			<div v-if="busy" class="flex items-center gap-2 text-base text-ink-gray-5">
+				<LoadingIndicator class="size-4" />
+				Thinking…
+			</div>
+		</div>
+
+		<!-- One rounded box: what you type, and underneath it what is answering
+		     and the button that sends it. -->
+		<div class="shrink-0 border-t border-outline-gray-1 p-3">
+			<div
+				class="rounded-xl border bg-surface-white px-3 pb-2 pt-2.5 transition-colors"
+				:class="focused ? 'border-outline-gray-3' : 'border-outline-gray-2'"
+			>
+				<!-- A file picked here is sent with the next message, so the
+				     chat can put it on the right step and check it at once. -->
+				<div
+					v-if="attachment"
+					class="mb-2 flex items-center gap-2 rounded-lg bg-surface-gray-2 px-2.5 py-1.5 text-sm text-ink-gray-7"
+				>
+					<FeatherIcon name="paperclip" class="size-3.5 shrink-0 text-ink-gray-5" />
+					<span class="min-w-0 flex-1 truncate">{{ attachment.file_name }}</span>
+					<button class="shrink-0 text-ink-gray-5 hover:text-ink-gray-8" aria-label="Remove" @click="attachment = null">
+						<FeatherIcon name="x" class="size-3.5" />
 					</button>
 				</div>
-
-				<div v-for="(m, i) in messages" :key="i" class="text-base leading-relaxed">
-					<div v-if="m.role === 'user'" class="ml-8 rounded-lg bg-surface-gray-2 px-3 py-2 text-ink-gray-8">
-						{{ m.content }}
-					</div>
-
-					<!-- What it did on the way: one row per tool call, openable. -->
-					<details v-else-if="m.role === 'step'" class="rounded-lg border border-outline-gray-2">
-						<summary class="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm text-ink-gray-7">
-							<FeatherIcon
-								:name="m.step.failed ? 'alert-circle' : 'check'"
-								class="size-3.5 shrink-0"
-								:class="m.step.failed ? 'text-ink-red-3' : 'text-ink-green-3'"
-							/>
-							<span class="flex-1 truncate">{{ m.step.label || m.step.tool }}</span>
-						</summary>
-						<pre class="overflow-x-auto whitespace-pre-wrap border-t border-outline-gray-1 px-3 py-2 text-sm text-ink-gray-6">{{ detail(m.step) }}</pre>
-					</details>
-
-					<!-- A change to this site: nothing happens until it is applied. -->
-					<div v-else-if="m.role === 'change'" class="rounded-lg border border-outline-gray-2">
-						<div class="flex items-center gap-2 border-b border-outline-gray-1 bg-surface-gray-1 px-3 py-2">
-							<span class="flex-1 truncate text-sm font-medium text-ink-gray-8">{{ m.set.title }}</span>
-							<Badge :theme="m.set.status === 'Applied' ? 'green' : 'gray'" :label="m.set.status" size="sm" />
-						</div>
-						<ul class="list-disc space-y-1 px-3 py-2 pl-7 text-sm text-ink-gray-7">
-							<li v-for="(c, j) in m.set.changes" :key="j">{{ c.summary }}</li>
-						</ul>
-
-						<!-- What it means, before and after, without touching the site. -->
-						<div v-if="m.preview" class="border-t border-outline-gray-1 px-3 py-2">
-							<div v-for="(p, j) in m.preview" :key="j" class="mb-2 last:mb-0">
-								<div class="text-sm font-medium text-ink-gray-7">
-									{{ p.action }} · {{ p.doctype }}
-								</div>
-								<table class="mt-1 w-full text-sm">
-									<tbody>
-										<tr v-for="(line, k) in p.lines" :key="k" class="align-top">
-											<td class="py-0.5 pr-2 text-ink-gray-5">{{ line.field }}</td>
-											<td class="py-0.5 pr-2 text-ink-gray-5 line-through" :class="line.before ? '' : 'opacity-40'">
-												{{ line.before || "—" }}
-											</td>
-											<td class="py-0.5 text-ink-gray-8">{{ line.after || "—" }}</td>
-										</tr>
-									</tbody>
-								</table>
-							</div>
-						</div>
-
-						<div class="flex gap-2 border-t border-outline-gray-1 px-3 py-2">
-							<Button size="sm" variant="ghost" :loading="m.loading" @click="showPreview(m)">
-								{{ m.preview ? "Hide" : "What changed" }}
-							</Button>
-						</div>
-					</div>
-
-					<div v-else class="mr-4 whitespace-pre-line text-ink-gray-8">{{ m.content }}</div>
-				</div>
-
-				<div v-if="busy" class="flex items-center gap-2 text-base text-ink-gray-5">
-					<LoadingIndicator class="size-4" />
-					Thinking…
-				</div>
-			</div>
-
-			<!-- One rounded box: what you type, and underneath it what is answering
-			     and the button that sends it. -->
-			<div class="shrink-0 border-t border-outline-gray-1 p-3">
-				<div
-					class="rounded-xl border bg-surface-white px-3 pb-2 pt-2.5 transition-colors"
-					:class="focused ? 'border-outline-gray-3' : 'border-outline-gray-2'"
-				>
-					<!-- A file picked here is sent with the next message, so the
-					     chat can put it on the right step and check it at once. -->
-					<div
-						v-if="attachment"
-						class="mb-2 flex items-center gap-2 rounded-lg bg-surface-gray-2 px-2.5 py-1.5 text-sm text-ink-gray-7"
+				<textarea
+					v-model="draft"
+					rows="2"
+					class="block w-full resize-none border-0 bg-transparent p-0 text-base leading-relaxed text-ink-gray-8 placeholder:text-ink-gray-4 focus:outline-none focus:ring-0"
+					:placeholder="o.locked ? 'Your data is with your consultant.' : 'Tell me about your business, or send me a spreadsheet…'"
+					:disabled="busy || o.locked"
+					@focus="focused = true"
+					@blur="focused = false"
+					@keydown.enter.exact.prevent="send(draft)"
+				/>
+				<div class="mt-1.5 flex items-center gap-2">
+					<button
+						class="flex size-7 shrink-0 items-center justify-center rounded-full text-ink-gray-6 transition-colors hover:bg-surface-gray-2 disabled:opacity-40"
+						:disabled="busy || uploading || o.locked"
+						aria-label="Attach a spreadsheet"
+						@click="picker.click()"
 					>
-						<FeatherIcon name="paperclip" class="size-3.5 shrink-0 text-ink-gray-5" />
-						<span class="min-w-0 flex-1 truncate">{{ attachment.file_name }}</span>
-						<button class="shrink-0 text-ink-gray-5 hover:text-ink-gray-8" aria-label="Remove" @click="attachment = null">
-							<FeatherIcon name="x" class="size-3.5" />
-						</button>
-					</div>
-					<textarea
-						v-model="draft"
-						rows="2"
-						class="block w-full resize-none border-0 bg-transparent p-0 text-base leading-relaxed text-ink-gray-8 placeholder:text-ink-gray-4 focus:outline-none focus:ring-0"
-						:placeholder="o.locked ? 'Your data is with your consultant.' : 'Tell me about your business, or send me a spreadsheet…'"
-						:disabled="busy || o.locked"
-						@focus="focused = true"
-						@blur="focused = false"
-						@keydown.enter.exact.prevent="send(draft)"
+						<LoadingIndicator v-if="uploading" class="size-4" />
+						<FeatherIcon v-else name="paperclip" class="size-4" />
+					</button>
+					<input
+						ref="picker"
+						type="file"
+						class="hidden"
+						accept=".xlsx,.xls,.csv"
+						@change="onPick"
 					/>
-					<div class="mt-1.5 flex items-center gap-2">
-						<button
-							class="flex size-7 shrink-0 items-center justify-center rounded-full text-ink-gray-6 transition-colors hover:bg-surface-gray-2 disabled:opacity-40"
-							:disabled="busy || uploading || o.locked"
-							aria-label="Attach a spreadsheet"
-							@click="picker.click()"
-						>
-							<LoadingIndicator v-if="uploading" class="size-4" />
-							<FeatherIcon v-else name="paperclip" class="size-4" />
-						</button>
-						<input
-							ref="picker"
-							type="file"
-							class="hidden"
-							accept=".xlsx,.xls,.csv"
-							@change="onPick"
-						/>
-						<span class="min-w-0 flex-1 truncate text-sm text-ink-gray-4">
-							{{ o.assistant_model || "Embark"
-							}}<template v-if="o.assistant_engine === 'flow'"> · Frappe Flow</template>
-						</span>
-						<button
-							class="flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-gray-3 text-ink-gray-8 transition-colors hover:bg-surface-gray-4 disabled:opacity-40"
-							:disabled="busy || o.locked || (!draft.trim() && !attachment)"
-							aria-label="Send"
-							@click="send(draft)"
-						>
-							<FeatherIcon name="arrow-up" class="size-4" />
-						</button>
-					</div>
+					<span class="min-w-0 flex-1 truncate text-sm text-ink-gray-4">
+						{{ o.assistant_model || "Embark"
+						}}<template v-if="o.assistant_engine === 'flow'"> · Frappe Flow</template>
+					</span>
+					<button
+						class="flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-gray-3 text-ink-gray-8 transition-colors hover:bg-surface-gray-4 disabled:opacity-40"
+						:disabled="busy || o.locked || (!draft.trim() && !attachment)"
+						aria-label="Send"
+						@click="send(draft)"
+					>
+						<FeatherIcon name="arrow-up" class="size-4" />
+					</button>
 				</div>
 			</div>
-		</aside>
+		</div>
 	</div>
 </template>
 
@@ -174,7 +167,7 @@ const attachment = ref(null)
 const opening = ref({ greeting: "", suggestions: [] })
 
 watch(
-	() => state.chatOpen && o.value?.assistant,
+	() => o.value?.assistant,
 	async (on) => {
 		if (!on || messages.value.length) return
 		try {

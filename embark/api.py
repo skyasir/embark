@@ -19,6 +19,7 @@ from frappe import _
 from frappe.utils import cstr, flt, get_fullname, validate_email_address
 
 from embark import assistant, configure, copilot, importer
+from embark import wizard as wizard_engine
 from embark.conditions import applies
 from embark.embark.doctype.embark_onboarding.embark_onboarding import (
 	LOCKED_STATUSES,
@@ -644,6 +645,58 @@ def configure_all(onboarding: str) -> dict:
 		"failed": failed,
 		"overview": get_overview(doc.name),
 	}
+
+
+# ── The setup wizard ──────────────────────────────────────────────────────────
+
+
+@frappe.whitelist()
+def wizard(onboarding: str | None = None) -> dict:
+	"""Every task, its questions, and what has been answered so far."""
+	doc = _get_onboarding(onboarding)
+	return wizard_engine.board(doc)
+
+
+@frappe.whitelist(methods=["POST"])
+def wizard_answer(question: str, value: str, onboarding: str | None = None) -> dict:
+	"""One answer, saved against the question it belongs to."""
+	doc = _get_onboarding(onboarding, "write")
+	if _locked(doc):
+		frappe.throw(_("This onboarding has been sent for review."))
+	wizard_engine.save_answer(doc, question, value)
+	return wizard_engine.board(doc)
+
+
+@frappe.whitelist()
+def suggestions(doctype: str, limit: int = 50) -> list[str]:
+	"""What this site already has of a kind, for a question that links to one."""
+	_get_onboarding(None)  # a question is only asked inside an onboarding
+	if not frappe.db.exists("DocType", doctype):
+		return []
+	return frappe.get_all(doctype, pluck="name", limit=limit, order_by="modified desc")
+
+
+@frappe.whitelist()
+def wizard_state(onboarding: str | None = None) -> dict:
+	"""Every task and the ERPNext record it has produced, read back live."""
+	doc = _get_onboarding(onboarding)
+	return wizard_engine.state(doc)
+
+
+@frappe.whitelist()
+def wizard_check(task: str, onboarding: str | None = None) -> dict:
+	"""What applying this task would write, before it is written."""
+	doc = _get_onboarding(onboarding)
+	return wizard_engine.check(doc, task)
+
+
+@frappe.whitelist(methods=["POST"])
+def wizard_apply(task: str, onboarding: str | None = None) -> dict:
+	"""Write the task's record to ERPNext and hand back what it holds."""
+	copilot._studio_user()
+	doc = _get_onboarding(onboarding, "write")
+	out = wizard_engine.apply(doc, task)
+	return {**out, "board": wizard_engine.board(doc)}
 
 
 @frappe.whitelist(methods=["POST"])
