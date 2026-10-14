@@ -614,6 +614,13 @@ GATED_BY = {
 	"activity_billing_rate": "runs_projects == yes",
 	"activity_costing_rate": "runs_projects == yes",
 	"tax_category_title": "is_gst_registered == yes",
+	"asset_category_name": "tracks_fixed_assets == yes",
+	"enable_cwip_accounting": "tracks_fixed_assets == yes",
+	"depreciation_method": "tracks_fixed_assets == yes",
+	"total_number_of_depreciations": "tracks_fixed_assets == yes",
+	"frequency_of_depreciation": "tracks_fixed_assets == yes",
+	"book_depreciation_automatically": "tracks_fixed_assets == yes",
+	"asset_location_name": "tracks_fixed_assets == yes",
 }
 
 # A step the question bank now covers in its own words. Switched off rather
@@ -650,6 +657,9 @@ ICONS = {
 	"Plan machine time": "clock",
 	"Set up projects": "clipboard",
 	"Set up your organisation": "users",
+	"Set employee rules": "user-check",
+	"Set payroll rules": "credit-card",
+	"Set up fixed assets": "box",
 }
 
 
@@ -673,6 +683,11 @@ def authored() -> tuple[list[dict], list[dict]]:
 	tasks, questions, seen = [], [], {}
 	for row in rows:
 		module, task = row["module"], row["task"]
+		# A question about a record this site does not have is not seeded at
+		# all. HR Settings and Payroll Settings arrive with Frappe HR, so those
+		# questions appear on the migrate after it is installed, not before.
+		if row["target_doctype"] and not frappe.db.exists("DocType", row["target_doctype"]):
+			continue
 		if task not in seen:
 			seen[task] = True
 			tasks.append(
@@ -702,7 +717,9 @@ def authored() -> tuple[list[dict], list[dict]]:
 				"sequence": row["sequence"],
 			}
 		)
-	return tasks, questions
+	# A step whose every question needed an app that is not here is not a step.
+	asked = {q["task"] for q in questions}
+	return [t for t in tasks if t["task_name"] in asked], questions
 
 
 # Fields a later version may add to a record seeded earlier. Only a blank is
@@ -838,6 +855,8 @@ def board(doc) -> dict:
 				continue
 			# Its own record if it names one, otherwise the task's.
 			target = q.target_doctype or task.target_doctype
+			if target and not frappe.db.exists("DocType", target):
+				continue
 			questions.append(
 				{
 					"key": q.name,
@@ -1196,7 +1215,7 @@ def _records(doc, task: str) -> list[dict]:
 		if not q.fieldname:
 			continue
 		doctype = q.target_doctype or task_doc.target_doctype
-		if not doctype:
+		if not doctype or not frappe.db.exists("DocType", doctype):
 			continue
 		single = bool(q.is_single if q.target_doctype else task_doc.is_single)
 		values = wanted.setdefault((doctype, single), {})
@@ -1209,7 +1228,37 @@ def _records(doc, task: str) -> list[dict]:
 	if missing:
 		return []
 
-	return [_plan(doc, doctype, single, values) for (doctype, single), values in wanted.items() if values]
+	rows = _child_rows(wanted)
+	plans = [_plan(doc, doctype, single, values) for (doctype, single), values in wanted.items() if values]
+	for plan in plans:
+		for field, row in rows.get(plan["doctype"], {}).items():
+			plan["values"][field] = [row]
+	return plans
+
+
+def _child_rows(wanted: dict) -> dict:
+	"""Lift a child table's answers onto the record that holds it.
+
+	Some of what a step asks belongs in a row of another record it is already
+	making: how an Asset Category depreciates is a row on that category, not a
+	record of its own. The questions name the child doctype, and the parent is
+	whichever record in the same step has a table of them.
+	"""
+	parents = [dt for dt, _single in wanted if not frappe.get_meta(dt).istable]
+	out: dict[str, dict] = {}
+	for key in list(wanted):
+		doctype, _single = key
+		if not frappe.get_meta(doctype).istable:
+			continue
+		row = wanted.pop(key)
+		for parent in parents:
+			field = next(
+				(f for f in frappe.get_meta(parent).get_table_fields() if f.options == doctype), None
+			)
+			if field:
+				out.setdefault(parent, {})[field.fieldname] = row
+				break
+	return out
 
 
 def _plan(doc, doctype: str, single: bool, values: dict) -> dict:
