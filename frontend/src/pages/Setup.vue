@@ -79,7 +79,7 @@
 					{{ current.description }}
 				</p>
 
-				<div class="mt-4 flex flex-wrap items-center gap-2">
+				<div v-if="currentTask.doctype" class="mt-4 flex flex-wrap items-center gap-2">
 					<span class="text-sm text-ink-gray-5">Doctype:</span>
 					<Badge theme="blue" size="md" :label="currentTask.doctype" />
 					<span v-if="current.field" class="font-mono text-sm text-ink-gray-5">{{ current.field }}</span>
@@ -96,23 +96,38 @@
 				<div class="mt-6">
 					<p class="text-sm font-medium uppercase tracking-wide text-ink-gray-5">Your answer</p>
 					<div class="ft-fill mt-2">
-						<select
-							v-if="current.type === 'Select'"
-							v-model="draft"
-							class="w-full rounded-lg border border-outline-gray-2 bg-surface-white px-3 py-2 text-base text-ink-gray-8"
-						>
-							<option value="">Choose…</option>
-							<option v-for="c in current.choices" :key="c" :value="c">{{ c }}</option>
-						</select>
-						<select
-							v-else-if="current.type === 'Yes / No'"
-							v-model="draft"
-							class="w-full rounded-lg border border-outline-gray-2 bg-surface-white px-3 py-2 text-base text-ink-gray-8"
-						>
-							<option value="">Choose…</option>
-							<option value="Yes">Yes</option>
-							<option value="No">No</option>
-						</select>
+						<!-- Pick one, or pick several: the same row either way, so the
+						     only difference a reader has to notice is the mark. -->
+						<div v-if="picker.length" class="space-y-2">
+							<button
+								v-for="(choice, i) in picker"
+								:key="choice.value"
+								class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors"
+								:class="
+									isPicked(choice.value)
+										? 'border-outline-gray-4 bg-surface-gray-2 text-ink-gray-9'
+										: 'border-outline-gray-2 text-ink-gray-7 hover:bg-surface-gray-1'
+								"
+								@click="pick(choice.value)"
+							>
+								<span
+									class="flex size-5 shrink-0 items-center justify-center border text-xs"
+									:class="[
+										multi ? 'rounded' : 'rounded-full',
+										isPicked(choice.value)
+											? 'border-outline-gray-5 bg-surface-gray-7 text-ink-white'
+											: 'border-outline-gray-3 text-ink-gray-4',
+									]"
+								>
+									<FeatherIcon v-if="isPicked(choice.value)" name="check" class="size-3" />
+									<template v-else-if="i < 9">{{ i + 1 }}</template>
+								</span>
+								<span class="min-w-0 flex-1">{{ choice.label }}</span>
+							</button>
+							<p v-if="multi" class="pt-1 text-sm text-ink-gray-5">
+								Pick as many as apply. {{ picked.length }} chosen.
+							</p>
+						</div>
 						<Autocomplete
 							v-else-if="current.type === 'Link'"
 							:options="linkOptions"
@@ -206,6 +221,34 @@ const lastCheck = ref(null)
 const linkOptions = ref([])
 
 const isStaff = computed(() => state.overview?.is_staff)
+
+/** A question answered by choosing, rather than typing. */
+const multi = computed(() => current.value?.type === "Multiple Choice")
+const picker = computed(() => {
+	if (!current.value) return []
+	if (current.value.type === "Yes / No") {
+		return [
+			{ value: "Yes", label: "Yes" },
+			{ value: "No", label: "No" },
+		]
+	}
+	return ["Select", "Multiple Choice"].includes(current.value.type) ? current.value.choices : []
+})
+const picked = computed(() => (draft.value || "").split(",").map((v) => v.trim()).filter(Boolean))
+
+function isPicked(value) {
+	return picked.value.includes(value)
+}
+
+function pick(value) {
+	if (!multi.value) {
+		draft.value = value
+		return
+	}
+	// A second press takes it off again, so nothing is a one-way door.
+	const now = isPicked(value) ? picked.value.filter((v) => v !== value) : [...picked.value, value]
+	draft.value = now.join(",")
+}
 
 /** Every question in order, so Previous and Next walk the whole wizard. */
 const flat = computed(() => (board.value?.tasks || []).flatMap((t) => t.questions.map((q) => ({ ...q, task: t.task }))))
