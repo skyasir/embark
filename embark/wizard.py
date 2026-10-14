@@ -46,6 +46,12 @@ TASKS = [
 		"description": "The business itself. Everything in ERPNext hangs off this record: your ledgers, your stock, your invoices.",
 	},
 	{
+		"task_name": "Choose your modules",
+		"sequence": 15,
+		"icon": "grid",
+		"description": "Which parts of ERPNext this business will run. Everything after this step is decided by the answer — a module you leave out is never mentioned again.",
+	},
+	{
 		"task_name": "Set the system timezone",
 		"sequence": 20,
 		"icon": "globe",
@@ -82,6 +88,7 @@ TASKS = [
 		"icon": "book",
 		"target_doctype": "Company",
 		"description": "Which ledger each kind of entry lands in, so nobody has to pick one on every document.",
+		"applies_when": "modules == accounts",
 	},
 	{
 		"task_name": "Create an item group",
@@ -89,6 +96,7 @@ TASKS = [
 		"icon": "layers",
 		"target_doctype": "Item Group",
 		"description": "How your products and services are grouped. Reports, taxes and defaults all follow these.",
+		"applies_when": "modules == stock,selling,buying,manufacturing",
 	},
 	{
 		"task_name": "Create a customer group",
@@ -96,6 +104,7 @@ TASKS = [
 		"icon": "user-check",
 		"target_doctype": "Customer Group",
 		"description": "How your customers are grouped — wholesale, retail, government — for pricing and reporting.",
+		"applies_when": "modules == selling,crm",
 	},
 	{
 		"task_name": "Create a supplier group",
@@ -103,6 +112,7 @@ TASKS = [
 		"icon": "truck",
 		"target_doctype": "Supplier Group",
 		"description": "How your suppliers are grouped, for reporting and for default payment terms.",
+		"applies_when": "modules == buying",
 	},
 	{
 		"task_name": "Create a territory",
@@ -110,6 +120,7 @@ TASKS = [
 		"icon": "map-pin",
 		"target_doctype": "Territory",
 		"description": "The places you sell into. Sales can then be read by region, and prices can differ by one.",
+		"applies_when": "modules == selling,crm",
 	},
 	{
 		"task_name": "Create a parent warehouse",
@@ -117,7 +128,7 @@ TASKS = [
 		"icon": "archive",
 		"target_doctype": "Warehouse",
 		"description": "A group warehouse that holds other warehouses — a city, a site, a building. Nothing is stocked in it directly.",
-		"applies_when": "keeps_stock == yes",
+		"applies_when": "modules == stock",
 	},
 	{
 		"task_name": "Create a child warehouse",
@@ -125,7 +136,7 @@ TASKS = [
 		"icon": "archive",
 		"target_doctype": "Warehouse",
 		"description": "A place stock actually sits: a godown, a shop floor, a van.",
-		"applies_when": "keeps_stock == yes",
+		"applies_when": "modules == stock",
 	},
 	{
 		"task_name": "Create a unit of measure",
@@ -133,6 +144,7 @@ TASKS = [
 		"icon": "hash",
 		"target_doctype": "UOM",
 		"description": "A unit you buy, sell or stock in that ERPNext does not already know.",
+		"applies_when": "modules == stock,manufacturing",
 	},
 ]
 
@@ -202,6 +214,18 @@ QUESTIONS = [
 		example="2014-04-01",
 		seq=60,
 	),
+	# ── Which modules ───────────────────────────────────────────────────
+	Q(
+		"modules",
+		"Choose your modules",
+		"Which parts of ERPNext will this business use?",
+		"Pick everything they will actually run. Every question after this one follows from the answer: choose Stock and you are asked about warehouses, leave it out and warehouses are never mentioned. You can come back and add a module later.",
+		kind="Multiple Choice",
+		options="accounts | Accounting — invoices, payments, taxes\nselling | Selling — quotations, orders, customers\nbuying | Buying — purchase orders, suppliers, bills\nstock | Stock — items, warehouses, deliveries\nmanufacturing | Manufacturing — BOMs, work orders\ncrm | CRM — leads and deals\nprojects | Projects — tasks and timesheets\nhr | HR and Payroll — employees, leave, salary\nassets | Assets — what you own, and depreciation",
+		example="Accounting, Selling, Buying, Stock",
+		reqd=1,
+		seq=10,
+	),
 	# ── Timezone ────────────────────────────────────────────────────────
 	Q(
 		"time_zone",
@@ -209,8 +233,7 @@ QUESTIONS = [
 		"Which timezone does the business run in?",
 		"Every document records the moment it was made. Get this wrong and a day's sales can land on the wrong date.",
 		field="time_zone",
-		kind="Link",
-		options="",
+		kind="Select",
 		example="Asia/Kolkata",
 		reqd=1,
 		seq=10,
@@ -506,21 +529,52 @@ QUESTIONS = [
 ]
 
 
+# Fields a later version may add to a record seeded earlier. Only a blank is
+# filled, so a consultant's own edit is never overwritten.
+FILLED_IF_BLANK = ("applies_when", "description", "example", "options", "icon")
+
+
 def seed():
 	"""Put the wizard's tasks and questions on the site, without overwriting edits."""
-	for task in TASKS:
-		if not frappe.db.exists("Embark Wizard Task", task["task_name"]):
-			frappe.get_doc({"doctype": "Embark Wizard Task", **task}).insert(ignore_permissions=True)
+	_seed("Embark Wizard Task", "task_name", TASKS)
+	_seed("Embark Wizard Question", "question_key", QUESTIONS)
 
-	for question in QUESTIONS:
-		if not frappe.db.exists("Embark Wizard Question", question["question_key"]):
-			frappe.get_doc({"doctype": "Embark Wizard Question", **question}).insert(ignore_permissions=True)
+
+def _seed(doctype: str, key: str, rows: list[dict]) -> None:
+	for row in rows:
+		if not frappe.db.exists(doctype, row[key]):
+			frappe.get_doc({"doctype": doctype, **row}).insert(ignore_permissions=True)
+			continue
+
+		doc = frappe.get_doc(doctype, row[key])
+		changed = False
+		for field in FILLED_IF_BLANK:
+			if row.get(field) and not doc.get(field):
+				doc.set(field, row[field])
+				changed = True
+
+		# What kind of answer a question takes, which field it fills and where it
+		# sits are structural — they are the engine, not the wording, and a later
+		# version that corrects them has to win or the wizard asks for a link
+		# where ERPNext wants a choice. The words stay as the site has them.
+		if doctype == "Embark Wizard Question":
+			for field in ("answer_type", "fieldname", "sequence"):
+				if row.get(field) is not None and doc.get(field) != row.get(field):
+					doc.set(field, row[field])
+					changed = True
+
+		if changed:
+			doc.save(ignore_permissions=True)
 
 
 def board(doc) -> dict:
-	"""The whole wizard: every task, its questions, and what has been answered."""
+	"""The whole wizard: every task, its questions, and what has been answered.
+
+	A task appears when the answers so far call for it. Those are the wizard's
+	own answers — the modules chosen in step two — so the wizard explains itself
+	without reaching into anything else.
+	"""
 	answers = {row.question: row.value for row in doc.wizard_answers}
-	interview = doc.answer_map()
 
 	tasks, answered, total = [], 0, 0
 	for task in frappe.get_all(
@@ -538,7 +592,7 @@ def board(doc) -> dict:
 		],
 		order_by="sequence asc",
 	):
-		if not applies(task.applies_when, interview):
+		if not applies(task.applies_when, answers):
 			continue
 
 		questions = []
@@ -558,7 +612,7 @@ def board(doc) -> dict:
 			],
 			order_by="sequence asc",
 		):
-			if not applies(q.applies_when, interview):
+			if not applies(q.applies_when, answers):
 				continue
 			questions.append(
 				{
@@ -568,10 +622,8 @@ def board(doc) -> dict:
 					"example": q.example,
 					"field": q.fieldname,
 					"type": q.answer_type,
-					"choices": [c.strip() for c in (q.options or "").split("\n") if c.strip()]
-					if q.answer_type == "Select"
-					else [],
-					"link_doctype": (q.options or "").strip() if q.answer_type == "Link" else None,
+					"choices": choices(q, task.target_doctype),
+					"link_doctype": _link_doctype(q, task.target_doctype),
 					"required": bool(q.is_required),
 					"answer": answers.get(q.name, ""),
 				}
@@ -605,6 +657,55 @@ def board(doc) -> dict:
 		"total": total,
 		"percent": round(100 * answered / total) if total else 0,
 	}
+
+
+def choices(question, target_doctype: str | None) -> list[dict]:
+	"""What a question may be answered with, asked of ERPNext itself.
+
+	A Select question fills a real field on a real doctype, and that field
+	already lists its options — so they are read from there rather than copied
+	into Embark, where they would quietly go stale the next time ERPNext adds
+	one. Only a question with no field of its own carries its own list.
+	"""
+	if question.answer_type not in ("Select", "Multiple Choice"):
+		return []
+
+	if question.answer_type == "Select" and question.fieldname and target_doctype:
+		field = frappe.get_meta(target_doctype).get_field(question.fieldname)
+		# A few Selects are filled in by the browser rather than stored on the
+		# field. The timezone list is the one that matters here, and frappe
+		# keeps it; reading it is still reading ERPNext, not a copy.
+		if field and field.fieldtype == "Select" and not field.options and question.fieldname == "time_zone":
+			from frappe.utils.momentjs import get_all_timezones
+
+			return [{"value": zone, "label": zone} for zone in get_all_timezones()]
+		if field and field.fieldtype == "Select" and field.options:
+			return [
+				{"value": option.strip(), "label": option.strip()}
+				for option in field.options.split("\n")
+				if option.strip()
+			]
+		if field and field.fieldtype in ("Link", "Dynamic Link") and field.options:
+			# The field turned out to be a link; the question follows it.
+			return []
+
+	out = []
+	for line in (question.options or "").split("\n"):
+		line = line.strip()
+		if not line:
+			continue
+		value, _sep, label = line.partition("|")
+		out.append({"value": value.strip(), "label": (label or value).strip()})
+	return out
+
+
+def _link_doctype(question, target_doctype: str | None) -> str | None:
+	"""Which doctype a Link question offers, taken from the field where it can be."""
+	if question.fieldname and target_doctype:
+		field = frappe.get_meta(target_doctype).get_field(question.fieldname)
+		if field and field.fieldtype == "Link" and field.options:
+			return field.options
+	return (question.options or "").strip() if question.answer_type == "Link" else None
 
 
 def save_answer(doc, question: str, value: str) -> None:
@@ -712,6 +813,45 @@ def result(doctype: str, name: str) -> dict:
 	}
 
 
+def state(doc) -> dict:
+	"""The implementation as ERPNext holds it: every task, and what it produced.
+
+	Read back from the records themselves, not from what Embark remembers doing,
+	so a record somebody changed by hand in the desk shows their change.
+	"""
+	made = {}
+	for row in frappe.get_all(
+		"Embark Change Set",
+		filters={"status": "Applied"},
+		fields=["name", "title", "applied_at"],
+		order_by="applied_at asc",
+	):
+		for change in frappe.get_all(
+			"Embark Change", filters={"parent": row.name}, fields=["ref_doctype", "ref_name", "summary"]
+		):
+			if change.ref_name and frappe.db.exists(change.ref_doctype, change.ref_name):
+				made[change.summary] = (change.ref_doctype, change.ref_name)
+
+	board_now = board(doc)
+	tasks = []
+	for task in board_now["tasks"]:
+		built = made.get(task["task"])
+		tasks.append(
+			{
+				**{k: task[k] for k in ("task", "title", "icon", "doctype", "answered", "total", "state")},
+				"record": result(*built) if built else None,
+			}
+		)
+
+	return {
+		"tasks": tasks,
+		"answered": board_now["answered"],
+		"total": board_now["total"],
+		"percent": board_now["percent"],
+		"built": sum(1 for t in tasks if t["record"]),
+	}
+
+
 def _record(doc, task: str) -> dict | None:
 	"""What this task's answers add up to: a doctype, a name, and the fields."""
 	task_doc = frappe.get_cached_doc("Embark Wizard Task", task)
@@ -733,7 +873,9 @@ def _record(doc, task: str) -> dict | None:
 			continue
 		if q.fieldname:
 			values[q.fieldname] = (
-				1 if q.answer_type == "Yes / No" and value.lower() in ("yes", "1", "true") else value
+				1
+				if q.answer_type == "Yes / No" and value.lower() in ("yes", "1", "true")
+				else (0 if q.answer_type == "Yes / No" else value)
 			)
 
 	if missing or not values:

@@ -33,12 +33,6 @@
 					label="Company"
 					:dot="overview.company_complete ? '' : 'todo'"
 				/>
-				<RailLink
-					:to="{ name: 'interview' }"
-					icon="message-square"
-					label="Business"
-					:dot="overview.interview.done ? '' : 'todo'"
-				/>
 
 				<button
 					v-if="overview.assistant"
@@ -94,7 +88,7 @@
 				     width; everything else reads better in a column. -->
 				<div
 					class="mx-auto w-full px-5 py-8"
-					:class="$route.name === 'setup' ? 'h-full max-w-none' : 'max-w-3xl'"
+					:class="wide ? 'h-full max-w-none' : 'max-w-3xl'"
 				>
 					<div v-if="state.loading" class="flex justify-center py-24">
 						<LoadingIndicator class="size-6 text-ink-gray-5" />
@@ -131,12 +125,14 @@ watchEffect(() => {
 })
 
 const title = computed(() => {
-	if (route.name === "interview") return "About your business"
 	if (route.name === "setup") return "Setup Wizard"
 	if (route.name === "company") return "Company details"
 	if (route.name === "area") return route.params.area
 	return "Overview"
 })
+
+// The screens that lay out their own columns need the whole width.
+const wide = computed(() => ["setup", "home"].includes(route.name))
 
 const aiOpen = ref(false)
 
