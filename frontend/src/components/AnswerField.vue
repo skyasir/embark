@@ -5,7 +5,7 @@
 	<select
 		v-if="question.type === 'Select'"
 		:value="modelValue"
-		class="w-full rounded-lg border border-outline-gray-2 bg-surface-white px-3 py-2.5 text-lg text-ink-gray-8"
+		class="w-full rounded-lg border border-outline-gray-2 bg-surface-white px-3 py-2 text-base text-ink-gray-8"
 		@change="emit('update:modelValue', $event.target.value)"
 	>
 		<option value="">Choose…</option>
@@ -15,7 +15,7 @@
 	<select
 		v-else-if="question.type === 'Yes / No'"
 		:value="modelValue"
-		class="w-full rounded-lg border border-outline-gray-2 bg-surface-white px-3 py-2.5 text-lg text-ink-gray-8"
+		class="w-full rounded-lg border border-outline-gray-2 bg-surface-white px-3 py-2 text-base text-ink-gray-8"
 		@change="emit('update:modelValue', $event.target.value)"
 	>
 		<option value="">Choose…</option>
@@ -34,7 +34,7 @@
 			:key="choice.value"
 			class="flex w-full items-center gap-3 rounded-lg border text-left transition-colors"
 			:class="[
-				layout === 'cards' ? 'px-4 py-4 text-xl' : 'px-3.5 py-3 text-lg',
+				layout === 'cards' ? 'px-3.5 py-3 text-base' : 'px-3 py-2.5 text-base',
 				picked.includes(choice.value)
 					? 'border-outline-gray-4 bg-surface-gray-2 text-ink-gray-9'
 					: 'border-outline-gray-2 text-ink-gray-7 hover:bg-surface-gray-1',
@@ -42,14 +42,14 @@
 			@click="toggle(choice.value)"
 		>
 			<span
-				class="flex size-6 shrink-0 items-center justify-center rounded border text-sm"
+				class="flex size-5 shrink-0 items-center justify-center rounded border text-xs"
 				:class="
 					picked.includes(choice.value)
 						? 'border-outline-gray-5 bg-surface-gray-7 text-ink-white'
 						: 'border-outline-gray-3 text-ink-gray-4'
 				"
 			>
-				<FeatherIcon v-if="picked.includes(choice.value)" name="check" class="size-3.5" />
+				<FeatherIcon v-if="picked.includes(choice.value)" name="check" class="size-3" />
 				<template v-else-if="i < 9">{{ i + 1 }}</template>
 			</span>
 			<span class="min-w-0 flex-1">{{ choice.label }}</span>
@@ -58,7 +58,6 @@
 
 	<Autocomplete
 		v-else-if="question.type === 'Link'"
-		size="lg"
 		:options="links"
 		:model-value="modelValue"
 		placeholder="Start typing…"
@@ -67,7 +66,6 @@
 
 	<FormControl
 		v-else
-		size="lg"
 		:model-value="modelValue"
 		:type="question.type === 'Date' ? 'date' : question.type === 'Number' ? 'number' : 'text'"
 		placeholder="Enter your answer..."

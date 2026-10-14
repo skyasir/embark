@@ -5,20 +5,19 @@
 
 	<!-- Onboarding in three stages: who the company is, which parts of ERPNext
 	     it runs, and then only the setup those parts call for. -->
-	<div v-else-if="board" class="flex h-full flex-col gap-4">
-		<ol class="flex shrink-0 flex-col gap-2 sm:flex-row">
-			<li v-for="(s, i) in board.stages" :key="s.key" class="flex-1">
+	<div v-else-if="board" class="flex h-full flex-col gap-3">
+		<nav class="flex shrink-0 flex-wrap items-center gap-0.5 text-sm">
+			<template v-for="(s, i) in board.stages" :key="s.key">
+				<FeatherIcon v-if="i" name="chevron-right" class="size-3.5 shrink-0 text-ink-gray-4" />
 				<button
-					class="flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors"
+					class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 transition-colors"
 					:class="
-						s.key === stage
-							? 'border-outline-gray-4 bg-surface-white'
-							: 'border-outline-gray-2 hover:bg-surface-gray-2'
+						s.key === stage ? 'bg-surface-gray-3 text-ink-gray-9' : 'text-ink-gray-5 hover:bg-surface-gray-2'
 					"
 					@click="go(s.key)"
 				>
 					<span
-						class="flex size-8 shrink-0 items-center justify-center rounded-full text-base font-medium"
+						class="flex size-5 shrink-0 items-center justify-center rounded-full text-xs"
 						:class="
 							s.done
 								? 'bg-surface-green-2 text-ink-green-3'
@@ -27,50 +26,46 @@
 									: 'bg-surface-gray-3 text-ink-gray-6'
 						"
 					>
-						<FeatherIcon v-if="s.done" name="check" class="size-4" />
+						<FeatherIcon v-if="s.done" name="check" class="size-3" />
 						<template v-else>{{ i + 1 }}</template>
 					</span>
-					<span class="min-w-0">
-						<span class="block text-lg font-medium leading-snug text-ink-gray-8">{{ s.title }}</span>
-						<span class="block text-base text-ink-gray-5">
-							{{ s.answered }} of {{ s.total }} answered
-						</span>
-					</span>
+					<span class="font-medium">{{ s.title }}</span>
+					<span class="tabular-nums text-ink-gray-4">{{ s.answered }}/{{ s.total }}</span>
 				</button>
-			</li>
-		</ol>
+			</template>
+		</nav>
 
 		<!-- ── Stage one: the company's own details, all on one screen ────── -->
 		<section v-if="stage === 'Company'" class="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col">
 			<div
 				class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-outline-gray-2 bg-surface-white"
 			>
-				<div class="min-h-0 flex-1 overflow-y-auto p-7">
-					<h2 class="text-3xl font-semibold leading-snug text-ink-gray-9">Company details</h2>
-					<p class="mt-2 text-lg leading-relaxed text-ink-gray-6">
+				<div class="min-h-0 flex-1 overflow-y-auto p-6">
+					<h2 class="text-2xl font-semibold leading-snug text-ink-gray-9">Company details</h2>
+					<p class="mt-2 text-base leading-relaxed text-ink-gray-6">
 						The business itself, as it is registered. Everything in ERPNext hangs off this record.
 					</p>
 
-					<div class="ft-fill mt-6 grid gap-6 sm:grid-cols-2">
+					<div class="ft-fill mt-5 grid gap-5 sm:grid-cols-2">
 						<div v-for="q in companyQuestions" :key="q.key" :class="wideField(q) ? 'sm:col-span-2' : ''">
-							<label class="block text-lg font-medium leading-snug text-ink-gray-8">{{ q.label }}</label>
-							<p v-if="q.description" class="mt-1 text-base leading-relaxed text-ink-gray-5">
+							<label class="block text-base font-medium leading-snug text-ink-gray-8">{{ q.label }}</label>
+							<p v-if="q.description" class="mt-1 text-sm leading-relaxed text-ink-gray-5">
 								{{ q.description }}
 							</p>
 							<div class="mt-2">
 								<AnswerField v-model="form[q.key]" :question="q" />
 							</div>
-							<p v-if="q.example" class="mt-1.5 font-mono text-base text-ink-gray-4">e.g. {{ q.example }}</p>
+							<p v-if="q.example" class="mt-1.5 font-mono text-sm text-ink-gray-4">e.g. {{ q.example }}</p>
 						</div>
 					</div>
 				</div>
 
-				<div class="flex shrink-0 items-center justify-between gap-3 border-t border-outline-gray-2 px-7 py-4">
-					<p class="text-base text-ink-gray-5">{{ filled }} of {{ companyQuestions.length }} filled in</p>
+				<div class="flex shrink-0 items-center justify-between gap-3 border-t border-outline-gray-2 px-6 py-3">
+					<p class="text-sm text-ink-gray-5">{{ filled }} of {{ companyQuestions.length }} filled in</p>
 					<div class="flex items-center gap-2">
 						<Button
 							v-if="canApply('Company')"
-							size="md"
+							size="sm"
 							variant="subtle"
 							icon-left="play"
 							:loading="applying"
@@ -78,7 +73,7 @@
 						>
 							Create in ERPNext
 						</Button>
-						<Button size="md" variant="solid" icon-right="chevron-right" :loading="saving" @click="saveForm()">
+						<Button size="sm" variant="solid" icon-right="chevron-right" :loading="saving" @click="saveForm()">
 							Save and continue
 						</Button>
 					</div>
@@ -91,21 +86,21 @@
 			<div
 				class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-outline-gray-2 bg-surface-white"
 			>
-				<div v-if="moduleQuestion" class="min-h-0 flex-1 overflow-y-auto p-7">
-					<h2 class="text-3xl font-semibold leading-snug text-ink-gray-9">{{ moduleQuestion.label }}</h2>
-					<p class="mt-2 text-lg leading-relaxed text-ink-gray-6">{{ moduleQuestion.description }}</p>
+				<div v-if="moduleQuestion" class="min-h-0 flex-1 overflow-y-auto p-6">
+					<h2 class="text-2xl font-semibold leading-snug text-ink-gray-9">{{ moduleQuestion.label }}</h2>
+					<p class="mt-2 text-base leading-relaxed text-ink-gray-6">{{ moduleQuestion.description }}</p>
 
 					<div class="mt-6">
 						<AnswerField v-model="modules" :question="moduleQuestion" layout="cards" />
 					</div>
 				</div>
 
-				<div class="flex shrink-0 items-center justify-between gap-3 border-t border-outline-gray-2 px-7 py-4">
-					<Button size="md" variant="ghost" icon-left="chevron-left" @click="go('Company')">Back</Button>
+				<div class="flex shrink-0 items-center justify-between gap-3 border-t border-outline-gray-2 px-6 py-3">
+					<Button size="sm" variant="ghost" icon-left="chevron-left" @click="go('Company')">Back</Button>
 					<div class="flex items-center gap-3">
-						<p class="text-base text-ink-gray-5">{{ moduleCount }} chosen</p>
+						<p class="text-sm text-ink-gray-5">{{ moduleCount }} chosen</p>
 						<Button
-							size="md"
+							size="sm"
 							variant="solid"
 							icon-right="chevron-right"
 							:loading="saving"
@@ -126,12 +121,12 @@
 					class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-outline-gray-2 bg-surface-white"
 				>
 					<div class="shrink-0 border-b border-outline-gray-2 px-4 py-4">
-						<h1 class="text-xl font-semibold text-ink-gray-9">Setup questions</h1>
+						<h1 class="text-lg font-semibold text-ink-gray-9">Setup questions</h1>
 						<div class="mt-2 flex items-center justify-between gap-2">
-							<span class="text-base text-ink-gray-5">
+							<span class="text-sm text-ink-gray-5">
 								{{ setupStage.answered }} of {{ setupStage.total }} questions answered
 							</span>
-							<span class="shrink-0 text-base font-medium text-ink-gray-7">{{ setupPercent }}%</span>
+							<span class="shrink-0 text-sm font-medium text-ink-gray-7">{{ setupPercent }}%</span>
 						</div>
 						<div class="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-gray-2">
 							<div
@@ -144,7 +139,7 @@
 					<nav class="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
 						<div v-for="task in stageTasks('Setup')" :key="task.task">
 							<button
-								class="flex w-full items-center gap-2 rounded-lg px-2.5 py-2.5 text-left hover:bg-surface-gray-2"
+								class="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-surface-gray-2"
 								@click="toggle(task.task)"
 							>
 								<FeatherIcon
@@ -152,7 +147,7 @@
 									class="size-4 shrink-0 text-ink-gray-4"
 								/>
 								<span
-									class="min-w-0 flex-1 text-lg font-medium leading-snug"
+									class="min-w-0 flex-1 text-base font-medium leading-snug"
 									:class="task.answered === task.total ? 'text-ink-gray-5' : 'text-ink-gray-8'"
 								>
 									{{ task.title }}
@@ -167,7 +162,7 @@
 							<ul v-if="open === task.task" class="ml-6 space-y-0.5 border-l border-outline-gray-2 pl-2">
 								<li v-for="q in task.questions" :key="q.key">
 									<button
-										class="flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-base leading-snug transition-colors"
+										class="flex w-full items-start gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm leading-snug transition-colors"
 										:class="
 											q.key === current?.key
 												? 'bg-surface-gray-3 font-medium text-ink-gray-9'
@@ -193,30 +188,30 @@
 				<div
 					class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-outline-gray-2 bg-surface-white"
 				>
-					<div class="min-h-0 flex-1 overflow-y-auto p-7">
-						<Badge theme="gray" size="md" :label="`Question ${position} of ${setupStage.total}`" />
+					<div class="min-h-0 flex-1 overflow-y-auto p-6">
+						<Badge theme="gray" size="sm" :label="`Question ${position} of ${setupStage.total}`" />
 
-						<h2 class="mt-3 text-3xl font-semibold leading-snug text-ink-gray-9">{{ current.label }}</h2>
-						<p v-if="current.description" class="mt-2 text-lg leading-relaxed text-ink-gray-6">
+						<h2 class="mt-3 text-2xl font-semibold leading-snug text-ink-gray-9">{{ current.label }}</h2>
+						<p v-if="current.description" class="mt-2 text-base leading-relaxed text-ink-gray-6">
 							{{ current.description }}
 						</p>
 
 						<div v-if="currentTask.doctype" class="mt-4 flex flex-wrap items-center gap-2">
-							<span class="text-base text-ink-gray-5">Doctype:</span>
-							<Badge theme="blue" size="md" :label="currentTask.doctype" />
-							<span v-if="current.field" class="font-mono text-base text-ink-gray-5">{{ current.field }}</span>
+							<span class="text-sm text-ink-gray-5">Doctype:</span>
+							<Badge theme="blue" size="sm" :label="currentTask.doctype" />
+							<span v-if="current.field" class="font-mono text-sm text-ink-gray-5">{{ current.field }}</span>
 						</div>
 
 						<div
 							v-if="current.example"
 							class="mt-5 rounded-lg border border-outline-gray-2 bg-surface-gray-1 px-4 py-3"
 						>
-							<p class="text-base font-medium text-ink-gray-5">Example</p>
-							<p class="mt-1 font-mono text-lg text-ink-gray-8">{{ current.example }}</p>
+							<p class="text-sm font-medium text-ink-gray-5">Example</p>
+							<p class="mt-1 font-mono text-base text-ink-gray-8">{{ current.example }}</p>
 						</div>
 
 						<div class="mt-6">
-							<p class="text-base font-medium uppercase tracking-wide text-ink-gray-5">Your answer</p>
+							<p class="text-sm font-medium uppercase tracking-wide text-ink-gray-5">Your answer</p>
 							<div class="ft-fill mt-2">
 								<AnswerField v-model="draft" :question="current" @enter="next()" />
 							</div>
@@ -229,9 +224,9 @@
 							<div class="flex items-start gap-2">
 								<FeatherIcon name="shield" class="mt-0.5 size-4 shrink-0 text-ink-gray-5" />
 								<div class="min-w-0">
-									<p class="text-lg font-medium text-ink-gray-8">{{ lastCheck.about_to }}</p>
+									<p class="text-base font-medium text-ink-gray-8">{{ lastCheck.about_to }}</p>
 									<ul class="mt-1.5 space-y-1">
-										<li v-for="(reason, i) in lastCheck.safe_because" :key="i" class="text-base text-ink-gray-6">
+										<li v-for="(reason, i) in lastCheck.safe_because" :key="i" class="text-sm text-ink-gray-6">
 											{{ reason }}
 										</li>
 									</ul>
@@ -242,7 +237,7 @@
 						<div v-if="lastRecord" class="mt-6 overflow-hidden rounded-lg border border-outline-green-2">
 							<div class="flex items-center gap-2 border-b border-outline-green-2 bg-surface-green-1 px-3 py-2">
 								<FeatherIcon name="check-circle" class="size-4 shrink-0 text-ink-green-3" />
-								<span class="min-w-0 flex-1 truncate text-base font-semibold text-ink-green-3">
+								<span class="min-w-0 flex-1 truncate text-sm font-semibold text-ink-green-3">
 									{{ lastRecord.doctype }} {{ lastRecord.name }} is in ERPNext
 								</span>
 								<a :href="lastRecord.url" target="_blank" rel="noopener">
@@ -252,14 +247,14 @@
 						</div>
 					</div>
 
-					<div class="flex shrink-0 items-center justify-between border-t border-outline-gray-2 px-7 py-4">
-						<Button size="md" variant="ghost" icon-left="chevron-left" @click="previous()">
+					<div class="flex shrink-0 items-center justify-between border-t border-outline-gray-2 px-6 py-3">
+						<Button size="sm" variant="ghost" icon-left="chevron-left" @click="previous()">
 							{{ position === 1 ? "Back to modules" : "Previous" }}
 						</Button>
 						<div class="flex items-center gap-2">
 							<Button
 								v-if="currentTask.doctype && currentTask.answered === currentTask.total && isStaff"
-								size="md"
+								size="sm"
 								variant="subtle"
 								icon-left="play"
 								:loading="applying"
@@ -268,7 +263,7 @@
 								Create in ERPNext
 							</Button>
 							<Button
-								size="md"
+								size="sm"
 								variant="solid"
 								icon-right="chevron-right"
 								:loading="saving"
@@ -283,7 +278,7 @@
 			</section>
 
 			<section v-else class="flex flex-1 items-center justify-center">
-				<p class="max-w-md text-center text-lg text-ink-gray-5">
+				<p class="max-w-md text-center text-base text-ink-gray-5">
 					The modules you chose need no further setup. Go back a stage to add one.
 				</p>
 			</section>
