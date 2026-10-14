@@ -992,6 +992,10 @@ def seed():
 		else:
 			_fill_blanks(area)
 
+	from embark import wizard
+
+	wizard.seed()
+
 	_seed_studio_role()
 	_seed_desk()
 

@@ -47,6 +47,12 @@
 			<nav class="flex-1 space-y-0.5 overflow-y-auto px-2 py-2">
 				<NavLink :to="{ name: 'home' }" icon="home" label="Overview" :collapsed="collapsed" />
 				<NavLink
+					:to="{ name: 'setup' }"
+					icon="sliders"
+					label="Setup Wizard"
+					:collapsed="collapsed"
+				/>
+				<NavLink
 					:to="{ name: 'company' }"
 					icon="briefcase"
 					label="Company details"
@@ -124,7 +130,12 @@
 			</header>
 
 			<main class="flex-1 overflow-y-auto">
-				<div class="mx-auto w-full max-w-3xl px-5 py-8">
+				<!-- The wizard lays out its own three columns and needs the whole
+				     width; everything else reads better in a column. -->
+				<div
+					class="mx-auto w-full px-5 py-8"
+					:class="$route.name === 'setup' ? 'h-full max-w-none' : 'max-w-3xl'"
+				>
 					<div v-if="state.loading" class="flex justify-center py-24">
 						<LoadingIndicator class="size-6 text-ink-gray-5" />
 					</div>
@@ -161,6 +172,7 @@ watchEffect(() => {
 
 const title = computed(() => {
 	if (route.name === "interview") return "About your business"
+	if (route.name === "setup") return "Setup Wizard"
 	if (route.name === "company") return "Company details"
 	if (route.name === "area") return route.params.area
 	return "Overview"
