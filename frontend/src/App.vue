@@ -9,17 +9,13 @@
 			<Dropdown :options="appMenu" placement="right">
 				<button class="rounded-lg p-1 transition-colors hover:bg-surface-gray-2" aria-label="Embark">
 					<svg viewBox="0 0 54 54" class="size-9" aria-hidden="true">
-						<defs>
-							<linearGradient id="embarkTile" x1="0" y1="0" x2="1" y2="1">
-								<stop offset="0" stop-color="#6366F1" />
-								<stop offset="1" stop-color="#4338CA" />
-							</linearGradient>
-						</defs>
-						<rect width="54" height="54" rx="15.43" fill="url(#embarkTile)" />
-						<path
-							d="M16.65 15.55a2.9 2.9 0 0 1 2.9-2.9h14.7a2.9 2.9 0 1 1 0 5.8H22.45v6.7h9.5a2.9 2.9 0 1 1 0 5.8h-9.5v6.7h11.8a2.9 2.9 0 1 1 0 5.8H19.55a2.9 2.9 0 0 1-2.9-2.9z"
-							fill="#fff"
-						/>
+						<rect width="54" height="54" rx="15.43" fill="#1668E3" />
+						<g transform="translate(13 12) scale(0.52)">
+							<path d="M0 0h10v56H0z" fill="#fff" />
+							<path d="M6 0h44l-8 13H6z" fill="#fff" />
+							<path d="M6 20h32l8 8-8 8H6z" fill="#BBD9FF" />
+							<path d="M6 43h44l-8 13H6z" fill="#fff" />
+						</g>
 					</svg>
 				</button>
 			</Dropdown>
@@ -34,14 +30,7 @@
 					:dot="overview.company_complete ? '' : 'todo'"
 				/>
 
-				<button
-					v-if="overview.assistant"
-					class="group mt-2 flex w-16 flex-col items-center gap-1 rounded-lg py-2 text-ink-gray-5 transition-colors hover:bg-surface-gray-2 hover:text-ink-gray-8"
-					@click="state.chatOpen = !state.chatOpen"
-				>
-					<FeatherIcon name="message-circle" class="size-5" />
-					<span class="text-[11px] leading-none">Ask</span>
-				</button>
+				<RailLink :to="{ name: 'ask' }" icon="message-circle" label="Ask" />
 				<button
 					v-if="overview.can_configure_ai"
 					class="flex w-16 flex-col items-center gap-1 rounded-lg py-2 text-ink-gray-5 transition-colors hover:bg-surface-gray-2 hover:text-ink-gray-8"
@@ -68,8 +57,6 @@
 				</button>
 			</Dropdown>
 		</aside>
-
-		<Assistant />
 
 		<div class="flex min-w-0 flex-1 flex-col">
 			<header class="flex h-12 shrink-0 items-center gap-2 border-b border-outline-gray-1 px-5 text-base">
@@ -109,7 +96,6 @@ import { useRoute, useRouter } from "vue-router"
 import { Avatar, Button, Dropdown, FeatherIcon, LoadingIndicator, Toast, Tooltip, call } from "frappe-ui"
 
 import AiSettings from "./components/AiSettings.vue"
-import Assistant from "./components/Assistant.vue"
 import Callout from "./components/Callout.vue"
 import RailLink from "./components/RailLink.vue"
 import { loadOverview, state } from "./data/store"
@@ -127,24 +113,19 @@ watchEffect(() => {
 const title = computed(() => {
 	if (route.name === "setup") return "Setup Wizard"
 	if (route.name === "company") return "Company details"
+	if (route.name === "ask") return "Ask Embark"
 	if (route.name === "area") return route.params.area
 	return "Overview"
 })
 
 // The screens that lay out their own columns need the whole width.
-const wide = computed(() => ["setup", "home"].includes(route.name))
+const wide = computed(() => ["setup", "home", "ask"].includes(route.name))
 
 const aiOpen = ref(false)
 
 const appMenu = computed(() => [
 	...(overview.value?.assistant
-		? [
-				{
-					label: state.chatOpen ? "Hide the chat" : "Ask Embark",
-					icon: "message-circle",
-					onClick: () => (state.chatOpen = !state.chatOpen),
-				},
-			]
+		? [{ label: "Ask Embark", icon: "message-circle", onClick: () => router.push({ name: "ask" }) }]
 		: []),
 	...(overview.value?.can_configure_ai
 		? [{ label: "Configure AI", icon: "cpu", onClick: () => (aiOpen.value = true) }]
