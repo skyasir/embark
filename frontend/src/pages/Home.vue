@@ -69,13 +69,35 @@
 		</div>
 
 		<!-- The ERPNext view: the records themselves, as the site holds them. -->
-		<aside class="hidden w-96 shrink-0 space-y-4 border-l border-outline-gray-2 pl-6 xl:block">
-			<div>
-				<h2 class="text-base font-semibold text-ink-gray-8">ERPNext</h2>
-				<p class="text-sm text-ink-gray-5">What is on this site, read back from the records.</p>
+		<aside class="hidden w-[460px] shrink-0 space-y-4 border-l border-outline-gray-2 pl-6 xl:block">
+			<div class="flex items-end justify-between gap-2">
+				<div>
+					<h2 class="text-base font-semibold text-ink-gray-8">ERPNext</h2>
+					<p class="text-sm text-ink-gray-5">What is on this site, read back from the records.</p>
+				</div>
+				<div class="flex shrink-0 rounded-md border border-outline-gray-2 p-0.5">
+					<button
+						v-for="tab in ['Records', 'Live site']"
+						:key="tab"
+						class="rounded px-2.5 py-1 text-sm transition-colors"
+						:class="showing === tab ? 'bg-surface-gray-3 text-ink-gray-9' : 'text-ink-gray-5 hover:text-ink-gray-8'"
+						@click="showing = tab"
+					>
+						{{ tab }}
+					</button>
+				</div>
 			</div>
 
-			<div v-for="task in built" :key="task.task" class="overflow-hidden rounded-lg border border-outline-green-2">
+			<!-- ERPNext itself, in the page. Same site, so nothing to sign into
+			     twice and nothing remote to reach for. -->
+			<ErpnextFrame v-if="showing === 'Live site'" :path="framePath" :height="620" />
+
+			<div
+				v-for="task in built"
+				v-show="showing === 'Records'"
+				:key="task.task"
+				class="overflow-hidden rounded-lg border border-outline-green-2"
+			>
 				<div class="flex items-center gap-2 border-b border-outline-green-2 bg-surface-green-1 px-3 py-2">
 					<FeatherIcon name="check-circle" class="size-3.5 shrink-0 text-ink-green-3" />
 					<span class="min-w-0 flex-1 truncate text-sm font-medium text-ink-green-3">
@@ -103,7 +125,10 @@
 				</table>
 			</div>
 
-			<p v-if="!built.length" class="rounded-lg border border-outline-gray-2 px-3 py-4 text-sm text-ink-gray-5">
+			<p
+				v-if="!built.length && showing === 'Records'"
+				class="rounded-lg border border-outline-gray-2 px-3 py-4 text-sm text-ink-gray-5"
+			>
 				Nothing built yet. Answer a step's questions and press Create in ERPNext, and the record appears
 				here with every field Embark wrote.
 			</p>
@@ -118,6 +143,7 @@ import { computed, ref, watch } from "vue"
 import { Badge, Button, FeatherIcon } from "frappe-ui"
 
 import AiSettings from "../components/AiSettings.vue"
+import ErpnextFrame from "../components/ErpnextFrame.vue"
 import StartOnboarding from "../components/StartOnboarding.vue"
 import { api } from "../data/api"
 import { state } from "../data/store"
@@ -126,6 +152,10 @@ const aiOpen = ref(false)
 const o = computed(() => state.overview)
 const state2 = ref({ tasks: [], answered: 0, total: 0, percent: 0, built: 0 })
 const built = computed(() => state2.value.tasks.filter((t) => t.record))
+
+const showing = ref("Records")
+/** The live pane opens on the newest record Embark made, else the desk. */
+const framePath = computed(() => built.value[built.value.length - 1]?.record?.url || "/app")
 
 async function load() {
 	if (!state.id) return
