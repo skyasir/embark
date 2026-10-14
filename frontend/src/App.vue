@@ -1,116 +1,76 @@
 <template>
 	<div class="flex h-full">
+		<!-- A rail, not a sidebar: icons only, so the three panes beside it get
+		     the width they need. Every destination keeps its name on hover. -->
 		<aside
 			v-if="overview && !overview.needs_start"
-			class="hidden shrink-0 flex-col border-r border-outline-gray-1 bg-surface-menu-bar transition-[width] md:flex"
-			:class="collapsed ? 'w-14' : 'w-64'"
+			class="hidden w-[76px] shrink-0 flex-col items-center border-r border-outline-gray-1 bg-surface-menu-bar py-3 md:flex"
 		>
-			<div class="flex items-center" :class="collapsed ? 'flex-col gap-1 px-2 py-3' : 'px-1 py-3'">
-				<Dropdown :options="appMenu" placement="left">
-					<button
-						class="flex items-center gap-2.5 rounded p-2 text-left hover:bg-surface-gray-2"
-						:class="collapsed ? '' : 'w-full'"
-					>
-						<!-- The app mark, inlined: the same artwork as the desk tile. -->
-						<svg viewBox="0 0 54 54" class="size-8 shrink-0" aria-hidden="true">
-							<defs>
-								<linearGradient id="embarkTile" x1="0" y1="0" x2="1" y2="1">
-									<stop offset="0" stop-color="#6366F1" />
-									<stop offset="1" stop-color="#4338CA" />
-								</linearGradient>
-							</defs>
-							<rect width="54" height="54" rx="15.43" fill="url(#embarkTile)" />
-							<path
-								d="M16.65 15.55a2.9 2.9 0 0 1 2.9-2.9h14.7a2.9 2.9 0 1 1 0 5.8H22.45v6.7h9.5a2.9 2.9 0 1 1 0 5.8h-9.5v6.7h11.8a2.9 2.9 0 1 1 0 5.8H19.55a2.9 2.9 0 0 1-2.9-2.9z"
-								fill="#fff"
-							/>
-						</svg>
-						<template v-if="!collapsed">
-							<div class="min-w-0 flex-1">
-								<div class="truncate text-base font-medium text-ink-gray-9">Embark</div>
-								<div class="truncate text-sm text-ink-gray-5">{{ overview.client_name }}</div>
-							</div>
-							<FeatherIcon name="chevron-down" class="size-4 shrink-0 text-ink-gray-5" />
-						</template>
-					</button>
-				</Dropdown>
-				<Tooltip :text="collapsed ? 'Expand' : 'Collapse'" placement="right">
-					<Button
-						variant="ghost"
-						:icon="collapsed ? 'chevrons-right' : 'chevrons-left'"
-						:label="collapsed ? 'Expand sidebar' : 'Collapse sidebar'"
-						@click="setCollapsed(!collapsed)"
-					/>
-				</Tooltip>
-			</div>
+			<Dropdown :options="appMenu" placement="right">
+				<button class="rounded-lg p-1 transition-colors hover:bg-surface-gray-2" aria-label="Embark">
+					<svg viewBox="0 0 54 54" class="size-9" aria-hidden="true">
+						<defs>
+							<linearGradient id="embarkTile" x1="0" y1="0" x2="1" y2="1">
+								<stop offset="0" stop-color="#6366F1" />
+								<stop offset="1" stop-color="#4338CA" />
+							</linearGradient>
+						</defs>
+						<rect width="54" height="54" rx="15.43" fill="url(#embarkTile)" />
+						<path
+							d="M16.65 15.55a2.9 2.9 0 0 1 2.9-2.9h14.7a2.9 2.9 0 1 1 0 5.8H22.45v6.7h9.5a2.9 2.9 0 1 1 0 5.8h-9.5v6.7h11.8a2.9 2.9 0 1 1 0 5.8H19.55a2.9 2.9 0 0 1-2.9-2.9z"
+							fill="#fff"
+						/>
+					</svg>
+				</button>
+			</Dropdown>
 
-			<nav class="flex-1 space-y-0.5 overflow-y-auto px-2 py-2">
-				<NavLink :to="{ name: 'home' }" icon="home" label="Overview" :collapsed="collapsed" />
-				<NavLink
-					:to="{ name: 'setup' }"
-					icon="sliders"
-					label="Setup Wizard"
-					:collapsed="collapsed"
-				/>
-				<NavLink
+			<nav class="mt-6 flex flex-1 flex-col items-center gap-1">
+				<RailLink :to="{ name: 'home' }" icon="home" label="Overview" />
+				<RailLink :to="{ name: 'setup' }" icon="sliders" label="Setup" />
+				<RailLink
 					:to="{ name: 'company' }"
 					icon="briefcase"
-					label="Company details"
-					:collapsed="collapsed"
-					:dot="overview.company_complete ? 'Ready' : 'Not Started'"
+					label="Company"
+					:dot="overview.company_complete ? '' : 'todo'"
 				/>
-				<NavLink
+				<RailLink
 					:to="{ name: 'interview' }"
 					icon="message-square"
-					label="About your business"
-					:collapsed="collapsed"
-					:dot="overview.interview.done ? 'Ready' : overview.interview.answered ? 'In Progress' : 'Not Started'"
+					label="Business"
+					:dot="overview.interview.done ? '' : 'todo'"
 				/>
-				<!-- The data steps are not fixed navigation: they are the plan the
-				     interview produced, so they live on the Embark page itself. -->
 
-				<div class="pt-4">
-					<Tooltip :text="collapsed ? 'Ask Embark' : ''" placement="right">
-						<button
-							v-if="overview.assistant"
-							class="flex h-8 w-full items-center gap-2 rounded text-base text-ink-gray-7 hover:bg-surface-gray-2"
-							:class="[
-								collapsed ? 'justify-center px-0' : 'px-2',
-								state.chatOpen ? 'bg-surface-selected font-medium text-ink-gray-9 shadow-sm' : '',
-							]"
-							@click="state.chatOpen = !state.chatOpen"
-						>
-							<FeatherIcon name="message-circle" class="size-4 shrink-0 text-ink-gray-6" />
-							<span v-if="!collapsed" class="flex-1 truncate text-left">Ask Embark</span>
-						</button>
-					</Tooltip>
-					<Tooltip :text="collapsed ? 'Configure AI' : ''" placement="right">
-						<button
-							v-if="overview.can_configure_ai"
-							class="flex h-8 w-full items-center gap-2 rounded text-base text-ink-gray-7 hover:bg-surface-gray-2"
-							:class="collapsed ? 'justify-center px-0' : 'px-2'"
-							@click="aiOpen = true"
-						>
-							<FeatherIcon name="cpu" class="size-4 shrink-0 text-ink-gray-6" />
-							<span v-if="!collapsed" class="flex-1 truncate text-left">Configure AI</span>
-						</button>
-					</Tooltip>
-				</div>
+				<button
+					v-if="overview.assistant"
+					class="group mt-2 flex w-16 flex-col items-center gap-1 rounded-lg py-2 text-ink-gray-5 transition-colors hover:bg-surface-gray-2 hover:text-ink-gray-8"
+					@click="state.chatOpen = !state.chatOpen"
+				>
+					<FeatherIcon name="message-circle" class="size-5" />
+					<span class="text-[11px] leading-none">Ask</span>
+				</button>
+				<button
+					v-if="overview.can_configure_ai"
+					class="flex w-16 flex-col items-center gap-1 rounded-lg py-2 text-ink-gray-5 transition-colors hover:bg-surface-gray-2 hover:text-ink-gray-8"
+					@click="aiOpen = true"
+				>
+					<FeatherIcon name="cpu" class="size-5" />
+					<span class="text-[11px] leading-none">AI</span>
+				</button>
 			</nav>
 
-			<Dropdown :options="userMenu" placement="right">
+			<Tooltip :text="isDark ? 'Switch to light' : 'Switch to dark'" placement="right">
 				<button
-					class="flex w-full items-center gap-2.5 border-t border-outline-gray-1 py-3 text-left hover:bg-surface-gray-2"
-					:class="collapsed ? 'justify-center px-0' : 'px-3'"
+					class="flex size-9 items-center justify-center rounded-lg text-ink-gray-5 transition-colors hover:bg-surface-gray-2 hover:text-ink-gray-8"
+					:aria-label="isDark ? 'Switch to light theme' : 'Switch to dark theme'"
+					@click="setTheme(isDark ? 'light' : 'dark')"
 				>
+					<FeatherIcon :name="isDark ? 'sun' : 'moon'" class="size-4" />
+				</button>
+			</Tooltip>
+
+			<Dropdown :options="userMenu" placement="right">
+				<button class="mt-2 rounded-full" :aria-label="overview.user.full_name">
 					<Avatar :label="overview.user.full_name" size="lg" />
-					<template v-if="!collapsed">
-						<div class="min-w-0 flex-1">
-							<div class="truncate text-base text-ink-gray-8">{{ overview.user.full_name }}</div>
-							<div class="truncate text-sm text-ink-gray-5">{{ overview.user.name }}</div>
-						</div>
-						<FeatherIcon name="chevron-up" class="size-4 shrink-0 text-ink-gray-5" />
-					</template>
 				</button>
 			</Dropdown>
 		</aside>
@@ -157,7 +117,7 @@ import { Avatar, Button, Dropdown, FeatherIcon, LoadingIndicator, Toast, Tooltip
 import AiSettings from "./components/AiSettings.vue"
 import Assistant from "./components/Assistant.vue"
 import Callout from "./components/Callout.vue"
-import NavLink from "./components/NavLink.vue"
+import RailLink from "./components/RailLink.vue"
 import { loadOverview, state } from "./data/store"
 import { applyTheme, setTheme, theme, watchSystemTheme } from "./data/theme"
 
@@ -179,27 +139,6 @@ const title = computed(() => {
 })
 
 const aiOpen = ref(false)
-
-// Remembered per browser, like the desk's own sidebar.
-const COLLAPSED_KEY = "embark-sidebar-collapsed"
-const collapsed = ref(read(COLLAPSED_KEY))
-
-function read(key) {
-	try {
-		return localStorage.getItem(key) === "1"
-	} catch {
-		return false
-	}
-}
-
-function setCollapsed(value) {
-	collapsed.value = value
-	try {
-		localStorage.setItem(COLLAPSED_KEY, value ? "1" : "0")
-	} catch {
-		// A private window can refuse; the sidebar still collapses for this visit.
-	}
-}
 
 const appMenu = computed(() => [
 	...(overview.value?.assistant
