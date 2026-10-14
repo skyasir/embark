@@ -3,203 +3,215 @@
 		<LoadingIndicator class="size-6 text-ink-gray-5" />
 	</div>
 
-	<div v-else-if="board" class="flex h-full gap-6">
-		<!-- ── The whole setup, grouped by what it builds ─────────────── -->
-		<aside class="hidden w-72 shrink-0 overflow-y-auto lg:block">
-			<div class="pb-6">
-				<h1 class="text-xl font-semibold text-ink-gray-9">Setup Wizard</h1>
-				<div class="mt-2 flex items-center justify-between">
-					<span class="text-sm text-ink-gray-5">
-						{{ board.answered }} of {{ board.total }} questions answered
-					</span>
-					<span class="text-sm font-medium text-ink-gray-7">{{ board.percent }}% Done</span>
-				</div>
-				<div class="mt-2 h-1 overflow-hidden rounded-full bg-surface-gray-2">
-					<div
-						class="h-full rounded-full bg-surface-gray-7 transition-all duration-300"
-						:style="{ width: `${board.percent}%` }"
-					/>
-				</div>
-			</div>
-
-			<nav class="space-y-1">
-				<div v-for="task in board.tasks" :key="task.task">
-					<button
-						class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-surface-gray-1"
-						@click="toggle(task.task)"
-					>
-						<FeatherIcon
-							:name="open === task.task ? 'chevron-down' : 'chevron-right'"
-							class="size-3.5 shrink-0 text-ink-gray-4"
-						/>
-						<span
-							class="min-w-0 flex-1 truncate text-base"
-							:class="task.answered === task.total ? 'text-ink-gray-5' : 'text-ink-gray-8'"
-						>
-							{{ task.title }}
+	<div v-else-if="board" class="flex h-full gap-5">
+		<!-- ── The whole setup, grouped by what it builds. A question is a
+		     sentence, so it wraps here rather than ending in an ellipsis. ── -->
+		<aside class="hidden w-[23rem] shrink-0 flex-col lg:flex">
+			<div
+				class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-outline-gray-2 bg-surface-white"
+			>
+				<div class="shrink-0 border-b border-outline-gray-2 px-4 py-4">
+					<h1 class="text-xl font-semibold text-ink-gray-9">Setup Wizard</h1>
+					<div class="mt-2 flex items-center justify-between gap-2">
+						<span class="text-base text-ink-gray-5">
+							{{ board.answered }} of {{ board.total }} questions answered
 						</span>
-						<FeatherIcon
-							v-if="task.answered === task.total"
-							name="check-circle"
-							class="size-3.5 shrink-0 text-ink-green-3"
+						<span class="shrink-0 text-base font-medium text-ink-gray-7">{{ board.percent }}%</span>
+					</div>
+					<div class="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-gray-2">
+						<div
+							class="h-full rounded-full bg-surface-gray-7 transition-all duration-300"
+							:style="{ width: `${board.percent}%` }"
 						/>
-					</button>
-
-					<ul v-if="open === task.task" class="ml-5 space-y-0.5 border-l border-outline-gray-2 pl-2">
-						<li v-for="q in task.questions" :key="q.key">
-							<button
-								class="flex w-full items-start gap-2 rounded px-2 py-1 text-left text-sm transition-colors"
-								:class="
-									q.key === current?.key
-										? 'bg-surface-gray-2 text-ink-gray-9'
-										: 'text-ink-gray-5 hover:bg-surface-gray-1'
-								"
-								@click="goTo(q.key)"
-							>
-								<FeatherIcon
-									:name="q.answer ? 'check-circle' : 'circle'"
-									class="mt-0.5 size-3 shrink-0"
-									:class="q.answer ? 'text-ink-green-3' : 'text-ink-gray-4'"
-								/>
-								<span class="min-w-0 flex-1 truncate">{{ q.label }}</span>
-							</button>
-						</li>
-					</ul>
+					</div>
 				</div>
-			</nav>
+
+				<nav class="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
+					<div v-for="task in board.tasks" :key="task.task">
+						<button
+							class="flex w-full items-center gap-2 rounded-lg px-2.5 py-2.5 text-left hover:bg-surface-gray-2"
+							@click="toggle(task.task)"
+						>
+							<FeatherIcon
+								:name="open === task.task ? 'chevron-down' : 'chevron-right'"
+								class="size-4 shrink-0 text-ink-gray-4"
+							/>
+							<span
+								class="min-w-0 flex-1 text-lg font-medium leading-snug"
+								:class="task.answered === task.total ? 'text-ink-gray-5' : 'text-ink-gray-8'"
+							>
+								{{ task.title }}
+							</span>
+							<FeatherIcon
+								v-if="task.answered === task.total"
+								name="check-circle"
+								class="size-4 shrink-0 text-ink-green-3"
+							/>
+						</button>
+
+						<ul v-if="open === task.task" class="ml-6 space-y-0.5 border-l border-outline-gray-2 pl-2">
+							<li v-for="q in task.questions" :key="q.key">
+								<button
+									class="flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-base leading-snug transition-colors"
+									:class="
+										q.key === current?.key
+											? 'bg-surface-gray-3 font-medium text-ink-gray-9'
+											: 'text-ink-gray-6 hover:bg-surface-gray-2'
+									"
+									@click="goTo(q.key)"
+								>
+									<FeatherIcon
+										:name="q.answer ? 'check-circle' : 'circle'"
+										class="mt-0.5 size-3.5 shrink-0"
+										:class="q.answer ? 'text-ink-green-3' : 'text-ink-gray-4'"
+									/>
+									<span class="min-w-0 flex-1">{{ q.label }}</span>
+								</button>
+							</li>
+						</ul>
+					</div>
+				</nav>
+			</div>
 		</aside>
 
 		<!-- ── One question at a time ──────────────────────────────────── -->
-		<section v-if="current" class="min-w-0 flex-1 overflow-y-auto">
-			<div class="mx-auto max-w-3xl pb-10">
-				<Badge theme="gray" size="sm" :label="`Question ${position} of ${board.total}`" />
+		<section v-if="current" class="mx-auto flex min-h-0 w-full min-w-0 max-w-4xl flex-1 flex-col">
+			<div
+				class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-outline-gray-2 bg-surface-white"
+			>
+				<div class="min-h-0 flex-1 overflow-y-auto p-7">
+					<Badge theme="gray" size="md" :label="`Question ${position} of ${board.total}`" />
 
-				<h2 class="mt-3 text-2xl font-semibold leading-snug text-ink-gray-9">{{ current.label }}</h2>
-				<p v-if="current.description" class="mt-2 text-base leading-relaxed text-ink-gray-6">
-					{{ current.description }}
-				</p>
+					<h2 class="mt-3 text-3xl font-semibold leading-snug text-ink-gray-9">{{ current.label }}</h2>
+					<p v-if="current.description" class="mt-2 text-lg leading-relaxed text-ink-gray-6">
+						{{ current.description }}
+					</p>
 
-				<div v-if="currentTask.doctype" class="mt-4 flex flex-wrap items-center gap-2">
-					<span class="text-sm text-ink-gray-5">Doctype:</span>
-					<Badge theme="blue" size="md" :label="currentTask.doctype" />
-					<span v-if="current.field" class="font-mono text-sm text-ink-gray-5">{{ current.field }}</span>
-				</div>
+					<div v-if="currentTask.doctype" class="mt-4 flex flex-wrap items-center gap-2">
+						<span class="text-base text-ink-gray-5">Doctype:</span>
+						<Badge theme="blue" size="md" :label="currentTask.doctype" />
+						<span v-if="current.field" class="font-mono text-base text-ink-gray-5">{{ current.field }}</span>
+					</div>
 
-				<div
-					v-if="current.example"
-					class="mt-5 rounded-lg border border-outline-gray-2 bg-surface-gray-1 px-4 py-3"
-				>
-					<p class="text-sm font-medium text-ink-gray-5">Example</p>
-					<p class="mt-0.5 font-mono text-base text-ink-gray-8">{{ current.example }}</p>
-				</div>
+					<div
+						v-if="current.example"
+						class="mt-5 rounded-lg border border-outline-gray-2 bg-surface-gray-1 px-4 py-3"
+					>
+						<p class="text-base font-medium text-ink-gray-5">Example</p>
+						<p class="mt-1 font-mono text-lg text-ink-gray-8">{{ current.example }}</p>
+					</div>
 
-				<div class="mt-6">
-					<p class="text-sm font-medium uppercase tracking-wide text-ink-gray-5">Your answer</p>
-					<div class="ft-fill mt-2">
-						<select
-							v-if="current.type === 'Select'"
-							v-model="draft"
-							class="w-full rounded-lg border border-outline-gray-2 bg-surface-white px-3 py-2 text-base text-ink-gray-8"
-						>
-							<option value="">Choose…</option>
-							<option v-for="c in current.choices" :key="c.value" :value="c.value">{{ c.label }}</option>
-						</select>
-						<select
-							v-else-if="current.type === 'Yes / No'"
-							v-model="draft"
-							class="w-full rounded-lg border border-outline-gray-2 bg-surface-white px-3 py-2 text-base text-ink-gray-8"
-						>
-							<option value="">Choose…</option>
-							<option value="Yes">Yes</option>
-							<option value="No">No</option>
-						</select>
-
-						<!-- Several answers at once: one row each, pressed on and off. -->
-						<div v-else-if="picker.length" class="space-y-2">
-							<button
-								v-for="(choice, i) in picker"
-								:key="choice.value"
-								class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors"
-								:class="
-									isPicked(choice.value)
-										? 'border-outline-gray-4 bg-surface-gray-2 text-ink-gray-9'
-										: 'border-outline-gray-2 text-ink-gray-7 hover:bg-surface-gray-1'
-								"
-								@click="pick(choice.value)"
+					<div class="mt-6">
+						<p class="text-base font-medium uppercase tracking-wide text-ink-gray-5">Your answer</p>
+						<div class="ft-fill mt-2">
+							<select
+								v-if="current.type === 'Select'"
+								v-model="draft"
+								class="w-full rounded-lg border border-outline-gray-2 bg-surface-white px-3 py-2.5 text-lg text-ink-gray-8"
 							>
-								<span
-									class="flex size-5 shrink-0 items-center justify-center rounded border text-xs"
+								<option value="">Choose…</option>
+								<option v-for="c in current.choices" :key="c.value" :value="c.value">{{ c.label }}</option>
+							</select>
+							<select
+								v-else-if="current.type === 'Yes / No'"
+								v-model="draft"
+								class="w-full rounded-lg border border-outline-gray-2 bg-surface-white px-3 py-2.5 text-lg text-ink-gray-8"
+							>
+								<option value="">Choose…</option>
+								<option value="Yes">Yes</option>
+								<option value="No">No</option>
+							</select>
+
+							<!-- Several answers at once: one row each, pressed on and off. -->
+							<div v-else-if="picker.length" class="space-y-2">
+								<button
+									v-for="(choice, i) in picker"
+									:key="choice.value"
+									class="flex w-full items-center gap-3 rounded-lg border px-3.5 py-3 text-left text-lg transition-colors"
 									:class="
 										isPicked(choice.value)
-											? 'border-outline-gray-5 bg-surface-gray-7 text-ink-white'
-											: 'border-outline-gray-3 text-ink-gray-4'
+											? 'border-outline-gray-4 bg-surface-gray-2 text-ink-gray-9'
+											: 'border-outline-gray-2 text-ink-gray-7 hover:bg-surface-gray-1'
 									"
+									@click="pick(choice.value)"
 								>
-									<FeatherIcon v-if="isPicked(choice.value)" name="check" class="size-3" />
-									<template v-else-if="i < 9">{{ i + 1 }}</template>
-								</span>
-								<span class="min-w-0 flex-1">{{ choice.label }}</span>
-							</button>
-							<p class="pt-1 text-sm text-ink-gray-5">
-								Pick as many as apply. {{ picked.length }} chosen.
-							</p>
-						</div>
-						<Autocomplete
-							v-else-if="current.type === 'Link'"
-							:options="linkOptions"
-							:model-value="draft"
-							placeholder="Start typing…"
-							@update:model-value="(v) => (draft = v?.value ?? '')"
-						/>
-						<FormControl
-							v-else
-							v-model="draft"
-							:type="current.type === 'Date' ? 'date' : current.type === 'Number' ? 'number' : 'text'"
-							placeholder="Enter your answer..."
-							@keydown.enter="next()"
-						/>
-					</div>
-				</div>
-
-				<div
-					v-if="lastCheck?.ready"
-					class="mt-6 rounded-lg border border-outline-gray-2 bg-surface-gray-1 px-4 py-3"
-				>
-					<div class="flex items-start gap-2">
-						<FeatherIcon name="shield" class="mt-0.5 size-4 shrink-0 text-ink-gray-5" />
-						<div class="min-w-0">
-							<p class="text-base font-medium text-ink-gray-8">{{ lastCheck.about_to }}</p>
-							<ul class="mt-1 space-y-0.5">
-								<li v-for="(reason, i) in lastCheck.safe_because" :key="i" class="text-sm text-ink-gray-6">
-									{{ reason }}
-								</li>
-							</ul>
+									<span
+										class="flex size-5 shrink-0 items-center justify-center rounded border text-xs"
+										:class="
+											isPicked(choice.value)
+												? 'border-outline-gray-5 bg-surface-gray-7 text-ink-white'
+												: 'border-outline-gray-3 text-ink-gray-4'
+										"
+									>
+										<FeatherIcon v-if="isPicked(choice.value)" name="check" class="size-3" />
+										<template v-else-if="i < 9">{{ i + 1 }}</template>
+									</span>
+									<span class="min-w-0 flex-1">{{ choice.label }}</span>
+								</button>
+								<p class="pt-1 text-base text-ink-gray-5">
+									Pick as many as apply. {{ picked.length }} chosen.
+								</p>
+							</div>
+							<Autocomplete
+								v-else-if="current.type === 'Link'"
+								size="lg"
+								:options="linkOptions"
+								:model-value="draft"
+								placeholder="Start typing…"
+								@update:model-value="(v) => (draft = v?.value ?? '')"
+							/>
+							<FormControl
+								v-else
+								v-model="draft"
+								size="lg"
+								:type="current.type === 'Date' ? 'date' : current.type === 'Number' ? 'number' : 'text'"
+								placeholder="Enter your answer..."
+								@keydown.enter="next()"
+							/>
 						</div>
 					</div>
-				</div>
 
-				<div
-					v-if="lastRecord"
-					class="mt-6 overflow-hidden rounded-lg border border-outline-green-2"
-				>
-					<div class="flex items-center gap-2 border-b border-outline-green-2 bg-surface-green-1 px-3 py-2">
-						<FeatherIcon name="check-circle" class="size-4 shrink-0 text-ink-green-3" />
-						<span class="min-w-0 flex-1 truncate text-sm font-semibold text-ink-green-3">
-							{{ lastRecord.doctype }} {{ lastRecord.name }} is in ERPNext
-						</span>
-						<a :href="lastRecord.url" target="_blank" rel="noopener">
-							<Button size="sm" variant="ghost" icon-right="external-link" label="Open" />
-						</a>
+					<div
+						v-if="lastCheck?.ready"
+						class="mt-6 rounded-lg border border-outline-gray-2 bg-surface-gray-1 px-4 py-3"
+					>
+						<div class="flex items-start gap-2">
+							<FeatherIcon name="shield" class="mt-0.5 size-4 shrink-0 text-ink-gray-5" />
+							<div class="min-w-0">
+								<p class="text-lg font-medium text-ink-gray-8">{{ lastCheck.about_to }}</p>
+								<ul class="mt-1.5 space-y-1">
+									<li v-for="(reason, i) in lastCheck.safe_because" :key="i" class="text-base text-ink-gray-6">
+										{{ reason }}
+									</li>
+								</ul>
+							</div>
+						</div>
+					</div>
+
+					<div
+						v-if="lastRecord"
+						class="mt-6 overflow-hidden rounded-lg border border-outline-green-2"
+					>
+						<div class="flex items-center gap-2 border-b border-outline-green-2 bg-surface-green-1 px-3 py-2">
+							<FeatherIcon name="check-circle" class="size-4 shrink-0 text-ink-green-3" />
+							<span class="min-w-0 flex-1 truncate text-base font-semibold text-ink-green-3">
+								{{ lastRecord.doctype }} {{ lastRecord.name }} is in ERPNext
+							</span>
+							<a :href="lastRecord.url" target="_blank" rel="noopener">
+								<Button size="sm" variant="ghost" icon-right="external-link" label="Open" />
+							</a>
+						</div>
 					</div>
 				</div>
 
-				<div class="mt-8 flex items-center justify-between">
-					<Button variant="ghost" icon-left="chevron-left" :disabled="position === 1" @click="previous()">
+				<div class="flex shrink-0 items-center justify-between border-t border-outline-gray-2 px-7 py-4">
+					<Button size="md" variant="ghost" icon-left="chevron-left" :disabled="position === 1" @click="previous()">
 						Previous
 					</Button>
 					<div class="flex items-center gap-2">
 						<Button
 							v-if="currentTask.answered === currentTask.total && isStaff"
+							size="md"
 							variant="subtle"
 							icon-left="play"
 							:loading="applying"
@@ -207,7 +219,7 @@
 						>
 							Create in ERPNext
 						</Button>
-						<Button variant="solid" icon-right="chevron-right" :loading="saving" @click="next()">
+						<Button size="md" variant="solid" icon-right="chevron-right" :loading="saving" @click="next()">
 							Next
 						</Button>
 					</div>
