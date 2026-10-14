@@ -1347,3 +1347,42 @@ class TestSetupWizard(TestCase):
 		self.assertEqual(
 			plans[0]["values"], {"quality_inspection_template_name": "Kraft Paper Incoming Check"}
 		)
+
+	def test_a_child_table_answer_rides_on_the_record_that_holds_it(self):
+		"""How an Asset Category depreciates is a row on that category, not a
+		record of its own."""
+		if not frappe.db.exists("DocType", "Asset Finance Book"):
+			self.skipTest("this site has no fixed assets")
+		self.answer("modules", "assets")
+		self.answer("tracks_fixed_assets", "Yes")
+		self.answer("asset_category_name", "Plant and Machinery")
+		self.answer("depreciation_method", "Written Down Value")
+		self.answer("total_number_of_depreciations", "15")
+		self.answer("frequency_of_depreciation", "12")
+
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		plans = wizard._records(doc, "Set up fixed assets")
+		category = next(p for p in plans if p["doctype"] == "Asset Category")
+		self.assertEqual(category["values"]["asset_category_name"], "Plant and Machinery")
+		# The three depreciation answers are one row on the category, and there
+		# is no plan to create a child record on its own.
+		self.assertEqual(
+			category["values"]["finance_books"],
+			[
+				{
+					"depreciation_method": "Written Down Value",
+					"total_number_of_depreciations": "15",
+					"frequency_of_depreciation": "12",
+				}
+			],
+		)
+		self.assertNotIn("Asset Finance Book", [p["doctype"] for p in plans])
+
+	def test_a_question_needing_an_app_that_is_not_installed_is_not_asked(self):
+		"""Payroll questions arrive with Frappe HR, not before it."""
+		if frappe.db.exists("DocType", "Payroll Settings"):
+			self.skipTest("Frappe HR is installed on this site")
+		self.answer("modules", "hr")
+		self.assertIsNone(self.task(self.board(), "Set payroll rules"))
+		# The HR step that needs nothing but ERPNext is still asked.
+		self.assertIsNotNone(self.task(self.board(), "Set up your organisation"))
