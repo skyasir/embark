@@ -16,6 +16,9 @@ once it exists, and never ask for the same thing twice.
 
 from __future__ import annotations
 
+import json
+import pathlib
+
 import frappe
 from frappe import _
 
@@ -561,18 +564,179 @@ QUESTIONS = [
 ]
 
 
+# ── The authored question bank ────────────────────────────────────────────────
+#
+# The wording lives in embark/data/wizard_questions.json, not in this file: it
+# is content, written and rewritten by whoever knows the business, and it has
+# no business being a Python literal. This end only decides what each row
+# means — which stage it belongs to, which module has to be chosen for it to
+# be asked, and what it writes.
+
+CONTENT = pathlib.Path(__file__).parent / "data" / "wizard_questions.json"
+
+# An authored module, and the choice in step two that has to include it.
+MODULE_GATES = {
+	"Company Setup": "",
+	"Accounting": "modules == accounts",
+	"Stock": "modules == stock",
+	"Selling": "modules == selling,crm",
+	"Buying": "modules == buying",
+	"CRM": "modules == crm",
+	"Manufacturing": "modules == manufacturing",
+	"Projects": "modules == projects",
+	"HR": "modules == hr",
+	"Assets": "modules == assets",
+}
+
+# The company's own identity is stage one. Everything else it owns — its
+# address, the days it is closed — is setup like any other.
+COMPANY_STAGE = ("Create a company",)
+
+# A question that only decides, and the questions that decision opens up.
+# The file does not say this, because a list of questions cannot: it is the
+# sense of the two sitting next to each other.
+GATED_BY = {
+	"additional_warehouse_name": "has_multiple_stock_locations == yes",
+	"rejected_warehouse_name": "does_quality_inspection == yes",
+	"cost_center_name": "uses_branch_cost_centres == yes",
+	"quality_inspection_template_name": "does_quality_inspection == yes",
+	"action_if_qi_not_submitted": "does_quality_inspection == yes",
+	"price_list_name": "uses_multiple_price_lists == yes",
+	"backflush_based_on": "does_manufacturing == yes",
+	"material_consumption": "does_manufacturing == yes",
+	"overproduction_for_sales_order": "does_manufacturing == yes",
+	"overproduction_for_work_order": "does_manufacturing == yes",
+	"make_serial_batch_from_work_order": "does_manufacturing == yes",
+	"update_bom_costs_automatically": "does_manufacturing == yes",
+	"fetch_timesheet_in_invoice": "runs_projects == yes",
+	"ignore_employee_time_overlap": "runs_projects == yes",
+	"activity_type": "runs_projects == yes",
+	"activity_billing_rate": "runs_projects == yes",
+	"activity_costing_rate": "runs_projects == yes",
+	"tax_category_title": "is_gst_registered == yes",
+}
+
+# A step the question bank now covers in its own words. Switched off rather
+# than deleted, so a site that has answered one keeps the answer.
+SUPERSEDED = (
+	"Create a fiscal year",
+	"Create an item group",
+	"Create a customer group",
+	"Create a supplier group",
+	"Create a territory",
+	"Create a parent warehouse",
+	"Create a child warehouse",
+)
+
+ICONS = {
+	"Create a company": "briefcase",
+	"Add your company address": "map-pin",
+	"Set up holidays": "calendar",
+	"Set your go-live dates": "calendar",
+	"Set up your bank account": "credit-card",
+	"Set up credit terms": "clock",
+	"Set accounting rules": "book",
+	"Set up cost centres": "git-branch",
+	"Set up taxes": "percent",
+	"Set up warehouses": "archive",
+	"Set stock rules": "layers",
+	"Set up quality checks": "shield",
+	"Organise your products": "tag",
+	"Organise customers and sales team": "users",
+	"Set selling rules": "shopping-cart",
+	"Set buying rules": "truck",
+	"Set up enquiry tracking": "phone",
+	"Set production rules": "tool",
+	"Plan machine time": "clock",
+	"Set up projects": "clipboard",
+	"Set up your organisation": "users",
+}
+
+
+def _is_single(doctype: str) -> int:
+	"""Whether this record is a Settings record ERPNext already holds."""
+	if not doctype or not frappe.db.exists("DocType", doctype):
+		return 0
+	return 1 if frappe.get_meta(doctype).issingle else 0
+
+
+def authored() -> tuple[list[dict], list[dict]]:
+	"""The question bank, read as tasks and questions.
+
+	A task is a topic the bank groups under one heading. It takes its place in
+	the order from its module, and the module decides whether it is asked at
+	all.
+	"""
+	rows = json.loads(CONTENT.read_text())
+	order = list(MODULE_GATES)
+
+	tasks, questions, seen = [], [], {}
+	for row in rows:
+		module, task = row["module"], row["task"]
+		if task not in seen:
+			seen[task] = True
+			tasks.append(
+				{
+					"task_name": task,
+					"sequence": 1000 + order.index(module) * 100 + len(seen),
+					"stage": "Company" if task in COMPANY_STAGE else "Setup",
+					"icon": ICONS.get(task, "circle"),
+					"applies_when": MODULE_GATES.get(module, ""),
+					"description": _("The answers below set this up in ERPNext."),
+				}
+			)
+		questions.append(
+			{
+				"is_single": _is_single(row["target_doctype"]),
+				"question_key": row["question_key"],
+				"task": task,
+				"label": row["label"],
+				"description": row["description"],
+				"target_doctype": row["target_doctype"],
+				"fieldname": row["fieldname"],
+				"answer_type": row["answer_type"],
+				"options": row["options"],
+				"example": row["example"],
+				"is_required": row["is_required"],
+				"applies_when": GATED_BY.get(row["question_key"], ""),
+				"sequence": row["sequence"],
+			}
+		)
+	return tasks, questions
+
+
 # Fields a later version may add to a record seeded earlier. Only a blank is
 # filled, so a consultant's own edit is never overwritten.
 FILLED_IF_BLANK = ("description", "example", "options", "icon")
 
 
 def seed():
-	"""Put the wizard's tasks and questions on the site, without overwriting edits."""
+	"""Put the wizard's tasks and questions on the site, without overwriting edits.
+
+	Two sources, in order: the steps this app has always asked, then the
+	question bank, which is the one people actually write. Where both ask the
+	same thing the bank wins, because it is the version somebody maintains.
+	"""
 	_seed("Embark Wizard Task", "task_name", TASKS)
 	_seed("Embark Wizard Question", "question_key", QUESTIONS)
 
+	bank_tasks, bank_questions = authored()
+	_seed("Embark Wizard Task", "task_name", bank_tasks, wording=True)
+	_seed("Embark Wizard Question", "question_key", bank_questions, wording=True)
 
-def _seed(doctype: str, key: str, rows: list[dict]) -> None:
+	# A step the bank now covers in its own words is switched off, not deleted,
+	# along with any question still sitting on it. A question the bank took
+	# over has already moved, so what is left here is what it did not want.
+	for task in SUPERSEDED:
+		if not frappe.db.exists("Embark Wizard Task", task):
+			continue
+		frappe.db.set_value("Embark Wizard Task", task, "is_active", 0)
+		for name in frappe.get_all("Embark Wizard Question", filters={"task": task}, pluck="name"):
+			frappe.db.set_value("Embark Wizard Question", name, "is_active", 0)
+
+
+def _seed(doctype: str, key: str, rows: list[dict], wording: bool = False) -> None:
+	"""Put rows on the site. `wording` marks a source that owns its own words."""
 	for row in rows:
 		if not frappe.db.exists(doctype, row[key]):
 			frappe.get_doc({"doctype": doctype, **row}).insert(ignore_permissions=True)
@@ -581,9 +745,17 @@ def _seed(doctype: str, key: str, rows: list[dict]) -> None:
 		doc = frappe.get_doc(doctype, row[key])
 		changed = False
 		for field in FILLED_IF_BLANK:
-			if row.get(field) and not doc.get(field):
+			# The question bank is written to be read, so its wording replaces
+			# whatever was there. Everything else only fills a blank.
+			if row.get(field) and (wording or not doc.get(field)) and doc.get(field) != row[field]:
 				doc.set(field, row[field])
 				changed = True
+		if wording and row.get("label") and doc.get("label") != row["label"]:
+			doc.set("label", row["label"])
+			changed = True
+		if wording and not doc.is_active:
+			doc.is_active = 1
+			changed = True
 
 		# What kind of answer a question takes, which field it fills, where it
 		# sits and when it is asked at all are structural — they are the engine,
@@ -592,7 +764,18 @@ def _seed(doctype: str, key: str, rows: list[dict]) -> None:
 		# step on a question that no longer exists. The words stay as the site
 		# has them.
 		structural = {
-			"Embark Wizard Question": ("answer_type", "fieldname", "sequence", "applies_when", "target_doctype"),
+			"Embark Wizard Question": (
+				"answer_type",
+				"fieldname",
+				"sequence",
+				"applies_when",
+				"target_doctype",
+				# Which step asks it is structural: when the question bank
+				# regroups a question under a new heading, it has to move, or
+				# it is left behind on a step nobody sees any more.
+				"task",
+				"is_single",
+			),
 			"Embark Wizard Task": ("sequence", "stage", "applies_when"),
 		}.get(doctype, ())
 		for field in structural:
