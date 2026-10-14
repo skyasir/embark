@@ -41,6 +41,7 @@ TASKS = [
 	{
 		"task_name": "Create a company",
 		"sequence": 10,
+		"stage": "Company",
 		"icon": "briefcase",
 		"target_doctype": "Company",
 		"description": "The business itself. Everything in ERPNext hangs off this record: your ledgers, your stock, your invoices.",
@@ -48,12 +49,14 @@ TASKS = [
 	{
 		"task_name": "Choose your modules",
 		"sequence": 15,
+		"stage": "Modules",
 		"icon": "grid",
 		"description": "Which parts of ERPNext this business will run. Everything after this step is decided by the answer — a module you leave out is never mentioned again.",
 	},
 	{
 		"task_name": "Set the system timezone",
 		"sequence": 20,
+		"stage": "Setup",
 		"icon": "globe",
 		"target_doctype": "System Settings",
 		"is_single": 1,
@@ -62,6 +65,7 @@ TASKS = [
 	{
 		"task_name": "Set date and number format",
 		"sequence": 30,
+		"stage": "Setup",
 		"icon": "calendar",
 		"target_doctype": "System Settings",
 		"is_single": 1,
@@ -70,6 +74,7 @@ TASKS = [
 	{
 		"task_name": "Set currency and float precision",
 		"sequence": 40,
+		"stage": "Setup",
 		"icon": "hash",
 		"target_doctype": "System Settings",
 		"is_single": 1,
@@ -78,6 +83,7 @@ TASKS = [
 	{
 		"task_name": "Create a fiscal year",
 		"sequence": 50,
+		"stage": "Setup",
 		"icon": "calendar",
 		"target_doctype": "Fiscal Year",
 		"description": "The twelve months your books are kept in. Nothing can be posted outside one.",
@@ -85,6 +91,7 @@ TASKS = [
 	{
 		"task_name": "Set company default accounts",
 		"sequence": 60,
+		"stage": "Setup",
 		"icon": "book",
 		"target_doctype": "Company",
 		"description": "Which ledger each kind of entry lands in, so nobody has to pick one on every document.",
@@ -93,6 +100,7 @@ TASKS = [
 	{
 		"task_name": "Create an item group",
 		"sequence": 70,
+		"stage": "Setup",
 		"icon": "layers",
 		"target_doctype": "Item Group",
 		"description": "How your products and services are grouped. Reports, taxes and defaults all follow these.",
@@ -101,6 +109,7 @@ TASKS = [
 	{
 		"task_name": "Create a customer group",
 		"sequence": 80,
+		"stage": "Setup",
 		"icon": "user-check",
 		"target_doctype": "Customer Group",
 		"description": "How your customers are grouped — wholesale, retail, government — for pricing and reporting.",
@@ -109,6 +118,7 @@ TASKS = [
 	{
 		"task_name": "Create a supplier group",
 		"sequence": 90,
+		"stage": "Setup",
 		"icon": "truck",
 		"target_doctype": "Supplier Group",
 		"description": "How your suppliers are grouped, for reporting and for default payment terms.",
@@ -117,6 +127,7 @@ TASKS = [
 	{
 		"task_name": "Create a territory",
 		"sequence": 100,
+		"stage": "Setup",
 		"icon": "map-pin",
 		"target_doctype": "Territory",
 		"description": "The places you sell into. Sales can then be read by region, and prices can differ by one.",
@@ -125,6 +136,7 @@ TASKS = [
 	{
 		"task_name": "Create a parent warehouse",
 		"sequence": 110,
+		"stage": "Setup",
 		"icon": "archive",
 		"target_doctype": "Warehouse",
 		"description": "A group warehouse that holds other warehouses — a city, a site, a building. Nothing is stocked in it directly.",
@@ -133,6 +145,7 @@ TASKS = [
 	{
 		"task_name": "Create a child warehouse",
 		"sequence": 120,
+		"stage": "Setup",
 		"icon": "archive",
 		"target_doctype": "Warehouse",
 		"description": "A place stock actually sits: a godown, a shop floor, a van.",
@@ -141,6 +154,7 @@ TASKS = [
 	{
 		"task_name": "Create a unit of measure",
 		"sequence": 130,
+		"stage": "Setup",
 		"icon": "hash",
 		"target_doctype": "UOM",
 		"description": "A unit you buy, sell or stock in that ERPNext does not already know.",
@@ -531,7 +545,7 @@ QUESTIONS = [
 
 # Fields a later version may add to a record seeded earlier. Only a blank is
 # filled, so a consultant's own edit is never overwritten.
-FILLED_IF_BLANK = ("applies_when", "description", "example", "options", "icon")
+FILLED_IF_BLANK = ("description", "example", "options", "icon")
 
 
 def seed():
@@ -553,15 +567,20 @@ def _seed(doctype: str, key: str, rows: list[dict]) -> None:
 				doc.set(field, row[field])
 				changed = True
 
-		# What kind of answer a question takes, which field it fills and where it
-		# sits are structural — they are the engine, not the wording, and a later
-		# version that corrects them has to win or the wizard asks for a link
-		# where ERPNext wants a choice. The words stay as the site has them.
-		if doctype == "Embark Wizard Question":
-			for field in ("answer_type", "fieldname", "sequence"):
-				if row.get(field) is not None and doc.get(field) != row.get(field):
-					doc.set(field, row[field])
-					changed = True
+		# What kind of answer a question takes, which field it fills, where it
+		# sits and when it is asked at all are structural — they are the engine,
+		# not the wording, and a later version that corrects them has to win or
+		# the wizard asks for a link where ERPNext wants a choice, or gates a
+		# step on a question that no longer exists. The words stay as the site
+		# has them.
+		structural = {
+			"Embark Wizard Question": ("answer_type", "fieldname", "sequence", "applies_when"),
+			"Embark Wizard Task": ("sequence", "stage", "applies_when"),
+		}.get(doctype, ())
+		for field in structural:
+			if row.get(field) is not None and doc.get(field) != row.get(field):
+				doc.set(field, row[field])
+				changed = True
 
 		if changed:
 			doc.save(ignore_permissions=True)
@@ -584,6 +603,7 @@ def board(doc) -> dict:
 			"name",
 			"task_name",
 			"sequence",
+			"stage",
 			"icon",
 			"target_doctype",
 			"is_single",
@@ -638,6 +658,7 @@ def board(doc) -> dict:
 			{
 				"task": task.name,
 				"title": task.task_name,
+				"stage": task.stage or "Setup",
 				"icon": task.icon,
 				"doctype": task.target_doctype,
 				"is_single": bool(task.is_single),
@@ -653,10 +674,48 @@ def board(doc) -> dict:
 
 	return {
 		"tasks": tasks,
+		"stages": _stages(tasks),
 		"answered": answered,
 		"total": total,
 		"percent": round(100 * answered / total) if total else 0,
 	}
+
+
+# Onboarding in three stages: who the company is, which parts of ERPNext it
+# runs, and then only the setup those parts call for. The third stage is
+# shorter for having asked the second, which is the point of the order.
+STAGES = (
+	("Company", _("Company details"), _("Who the business is, as it is registered.")),
+	("Modules", _("Modules"), _("Which parts of ERPNext this business will run.")),
+	("Setup", _("Setup questions"), _("Only what the modules you chose actually need.")),
+)
+
+
+def _stages(tasks: list[dict]) -> list[dict]:
+	"""Each stage, with how much of it is answered.
+
+	A stage with no task of its own is left out rather than shown empty — the
+	wizard is configuration, and a site may have been given its own.
+	"""
+	out = []
+	for key, title, description in STAGES:
+		mine = [task for task in tasks if task["stage"] == key]
+		if not mine:
+			continue
+		answered = sum(task["answered"] for task in mine)
+		total = sum(task["total"] for task in mine)
+		out.append(
+			{
+				"key": key,
+				"title": title,
+				"description": description,
+				"tasks": len(mine),
+				"answered": answered,
+				"total": total,
+				"done": bool(total) and answered == total,
+			}
+		)
+	return out
 
 
 def choices(question, target_doctype: str | None) -> list[dict]:
@@ -719,6 +778,28 @@ def save_answer(doc, question: str, value: str) -> None:
 			break
 	else:
 		doc.append("wizard_answers", {"question": question, "value": value})
+	doc.save(ignore_permissions=True)
+
+
+def save_answers(doc, answers: dict) -> None:
+	"""Several answers at once, saved in one write.
+
+	The company's own details are a form, not an interview — a name, a country,
+	a currency — so they arrive together and are kept together.
+	"""
+	known = set(
+		frappe.get_all("Embark Wizard Question", filters={"name": ("in", list(answers))}, pluck="name")
+	)
+	unknown = set(answers) - known
+	if unknown:
+		frappe.throw(_("{0} is not one of the wizard's questions.").format(sorted(unknown)[0]))
+
+	rows = {row.question: row for row in doc.wizard_answers}
+	for question, value in answers.items():
+		if question in rows:
+			rows[question].value = value
+		else:
+			doc.append("wizard_answers", {"question": question, "value": value})
 	doc.save(ignore_permissions=True)
 
 

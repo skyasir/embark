@@ -667,6 +667,19 @@ def wizard_answer(question: str, value: str, onboarding: str | None = None) -> d
 	return wizard_engine.board(doc)
 
 
+@frappe.whitelist(methods=["POST"])
+def wizard_answers(answers: str, onboarding: str | None = None) -> dict:
+	"""A whole form's worth of answers, saved in one go."""
+	doc = _get_onboarding(onboarding, "write")
+	if _locked(doc):
+		frappe.throw(_("This onboarding has been sent for review."))
+	given = frappe.parse_json(answers) or {}
+	if not isinstance(given, dict):
+		frappe.throw(_("Answers should be a question-to-answer map."))
+	wizard_engine.save_answers(doc, {str(k): str(v or "") for k, v in given.items()})
+	return wizard_engine.board(doc)
+
+
 @frappe.whitelist()
 def suggestions(doctype: str, limit: int = 50) -> list[str]:
 	"""What this site already has of a kind, for a question that links to one."""
