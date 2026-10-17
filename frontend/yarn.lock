@@ -304,6 +304,20 @@
     "@nodelib/fs.scandir" "2.1.5"
     fastq "^1.6.0"
 
+"@openuidev/lang-core@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.yarnpkg.com/@openuidev/lang-core/-/lang-core-0.4.1.tgz#3443446e1035c9f4dc1f80d785a62ffce7751a03"
+  integrity sha512-t9XSiORKTgyn6pWv8qqBkgD45PBhORdGWpQAHo3APvj9SYy7YprKURQgmXNu3z6E/Ds8tsLAI+AZjX3errH+jQ==
+  dependencies:
+    ci-info "^4.4.0"
+
+"@openuidev/vue-lang@^0.4.2":
+  version "0.4.2"
+  resolved "https://registry.yarnpkg.com/@openuidev/vue-lang/-/vue-lang-0.4.2.tgz#1dedd10d685c4b290795f5d95a890ff400a9ea6c"
+  integrity sha512-jkBA09Y//tktcIW3I32ovtMqL/pp2pX5lgZhaOzmHAEi9t7jMSLkcZayUvE7S6pqyAIKYuRJ30Hb35d3MYMLOQ==
+  dependencies:
+    "@openuidev/lang-core" "^0.4.1"
+
 "@popperjs/core@^2.11.2", "@popperjs/core@^2.9.0":
   version "2.11.8"
   resolved "https://registry.yarnpkg.com/@popperjs/core/-/core-2.11.8.tgz#6b79032e760a0899cd4204710beede972a3a185f"
@@ -1046,6 +1060,11 @@ chokidar@^3.6.0:
     readdirp "~3.6.0"
   optionalDependencies:
     fsevents "~2.3.2"
+
+ci-info@^4.4.0:
+  version "4.4.0"
+  resolved "https://registry.yarnpkg.com/ci-info/-/ci-info-4.4.0.tgz#7d54eff9f54b45b62401c26032696eb59c8bd18c"
+  integrity sha512-77PSwercCZU2Fc4sX94eF8k8Pxte6JAwL4/ICZLFjJLqegs7kCuAsqqj/70NQF6TvDpgFjkubQB2FW2ZZddvQg==
 
 classnames@^2.2.5:
   version "2.5.1"
@@ -2370,6 +2389,11 @@ xmlhttprequest-ssl@~2.1.1:
   version "2.1.2"
   resolved "https://registry.yarnpkg.com/xmlhttprequest-ssl/-/xmlhttprequest-ssl-2.1.2.tgz#e9e8023b3f29ef34b97a859f584c5e6c61418e23"
   integrity sha512-TEU+nJVUUnA4CYJFLvK5X9AOeH4KvDvhIfm0vV1GaQRtchnG0hgK5p8hw/xjv8cunWYCsiPCSDzObPyhEwq3KQ==
+
+zod@^4.6.7:
+  version "4.6.7"
+  resolved "https://registry.yarnpkg.com/zod/-/zod-4.6.7.tgz#e806cf64a7f4e37635ce9f2f52c04c3766f75e5b"
+  integrity sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==
 
 zrender@5.6.1:
   version "5.6.1"

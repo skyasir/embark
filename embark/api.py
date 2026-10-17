@@ -179,6 +179,7 @@ def ask(
 	onboarding: str | None = None,
 	history: str | list | None = None,
 	file_url: str | None = None,
+	ui_prompt: str | None = None,
 ) -> dict:
 	"""One turn of the chat, which drives the same screens the buttons do."""
 	doc = _get_onboarding(onboarding, "write")
@@ -186,7 +187,17 @@ def ask(
 		frappe.throw(_("This onboarding has been sent for review."))
 	if file_url:
 		_own_file(doc, file_url)
-	return assistant.ask(doc.name, message, frappe.parse_json(history) if history else [], file_url=file_url)
+	out = assistant.ask(
+		doc.name,
+		message,
+		frappe.parse_json(history) if history else [],
+		file_url=file_url,
+		ui_prompt=ui_prompt,
+	)
+	# What to show, if it can be shown. The words stay either way.
+	if ui_prompt:
+		out["ui"] = assistant.draw(out.get("reply") or "")
+	return out
 
 
 def _own_file(doc, file_url: str) -> None:

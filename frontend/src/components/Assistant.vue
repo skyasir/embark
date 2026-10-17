@@ -73,6 +73,11 @@
 					</div>
 				</div>
 
+				<!-- A reply that draws something draws it with Embark's own
+				     controls; one that does not is simply read. -->
+				<div v-else-if="m.ui" class="mr-4">
+					<Renderer :response="m.ui" :library="library" />
+				</div>
 				<div v-else class="mr-4 whitespace-pre-line text-ink-gray-8">{{ m.content }}</div>
 			</div>
 
@@ -150,7 +155,10 @@
 import { computed, nextTick, ref, watch } from "vue"
 import { Badge, Button, FeatherIcon, LoadingIndicator, toast } from "frappe-ui"
 
+import { Renderer } from "@openuidev/vue-lang"
+
 import { api, callMethod, errorText, uploadFile } from "../data/api"
+import { library, uiPrompt } from "../data/chatui"
 import { setOverview, state } from "../data/store"
 
 const o = computed(() => state.overview)
@@ -195,10 +203,13 @@ async function send(text) {
 			// Only the plain turns: the server rebuilds its own tool context.
 			history: JSON.stringify(said()),
 			file_url: sent?.file_url,
+			// What it may draw, written from the component library itself.
+			ui_prompt: uiPrompt(),
 		})
 		// Everything it did, in the order it did it.
 		;(result.steps || []).forEach((step) => messages.value.push({ role: "step", step }))
-		if (result.reply) messages.value.push({ role: "assistant", content: result.reply })
+		// `ui` is the same answer as something to show. Without it, the words.
+		if (result.reply) messages.value.push({ role: "assistant", content: result.reply, ui: result.ui || "" })
 		if (result.change_set) messages.value.push({ role: "change", set: result.change_set, busy: false, loading: false, preview: null })
 		// Answers it saved change the checklist behind the panel.
 		if (result.overview) setOverview(result.overview)

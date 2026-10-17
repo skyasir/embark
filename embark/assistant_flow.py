@@ -80,7 +80,7 @@ def ask(
 	agent = Agent(
 		model=model(),
 		name="ask-embark",
-		instructions=assistant.SYSTEM_PROMPT,
+		instructions=assistant._system(),
 		tools=tools,
 		# Every tool is one of Embark's own screens, with Embark's own rules
 		# already around it. There is nothing here to approve twice.
