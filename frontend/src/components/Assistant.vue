@@ -76,7 +76,9 @@
 				<!-- A reply that draws something draws it with Embark's own
 				     controls; one that does not is simply read. -->
 				<div v-else-if="m.ui" class="mr-4">
-					<Renderer :response="m.ui" :library="library" />
+					<!-- Re-parsed on every piece: the shell shows first and the
+					     parts fill in as their lines arrive. -->
+					<Renderer :response="m.ui" :library="library" :is-streaming="m.drawing" />
 				</div>
 				<div v-else class="mr-4 whitespace-pre-line text-ink-gray-8">{{ m.content }}</div>
 			</div>
@@ -152,12 +154,12 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from "vue"
+import { computed, nextTick, reactive, ref, watch } from "vue"
 import { Badge, Button, FeatherIcon, LoadingIndicator, toast } from "frappe-ui"
 
 import { Renderer } from "@openuidev/vue-lang"
 
-import { api, callMethod, errorText, uploadFile } from "../data/api"
+import { api, callMethod, errorText, stream, uploadFile } from "../data/api"
 import { library, uiPrompt } from "../data/chatui"
 import { setOverview, state } from "../data/store"
 
@@ -208,8 +210,13 @@ async function send(text) {
 		})
 		// Everything it did, in the order it did it.
 		;(result.steps || []).forEach((step) => messages.value.push({ role: "step", step }))
-		// `ui` is the same answer as something to show. Without it, the words.
-		if (result.reply) messages.value.push({ role: "assistant", content: result.reply, ui: result.ui || "" })
+		// The words land first; the drawing of them streams in behind.
+		if (result.reply) {
+			const shown = reactive({ role: "assistant", content: result.reply, ui: "", drawing: false })
+			messages.value.push(shown)
+			await scrollDown()
+			await drawIt(shown)
+		}
 		if (result.change_set) messages.value.push({ role: "change", set: result.change_set, busy: false, loading: false, preview: null })
 		// Answers it saved change the checklist behind the panel.
 		if (result.overview) setOverview(result.overview)
@@ -227,6 +234,30 @@ async function send(text) {
  * rows or change cards drawn beside it. Those carry no `content`, and a
  * provider rejects the whole request over one message it cannot read.
  */
+/**
+ * Draw the answer that was just given, as it is written. Nothing here can
+ * fail loudly: a drawing that does not arrive leaves the words, which are
+ * already on the screen.
+ */
+async function drawIt(shown) {
+	shown.drawing = true
+	try {
+		const result = await stream(
+			"draw",
+			{ reply: shown.content, ui_prompt: uiPrompt(), onboarding: state.id },
+			(piece) => {
+				shown.ui += piece
+			}
+		)
+		if (!result?.drawn) shown.ui = ""
+	} catch {
+		shown.ui = ""
+	} finally {
+		shown.drawing = false
+		await scrollDown()
+	}
+}
+
 function said() {
 	return messages.value
 		.filter((m) => (m.role === "user" || m.role === "assistant") && m.content)

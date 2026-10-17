@@ -20,7 +20,9 @@
 		</div>
 	</div>
 
-	<p v-else class="text-sm text-ink-gray-5">That question is not being asked here.</p>
+	<!-- A key that is not one of ours draws nothing: the words of the answer
+	     are already on the screen, and an error box helps nobody. -->
+	<p v-else-if="board && !question" class="hidden" />
 </template>
 
 <script setup>
