@@ -393,8 +393,86 @@ def _suggestions(o: dict, nothing_yet: bool) -> list[str]:
 	return out[:3]
 
 
+def draw(reply: str) -> str:
+	"""Turn a finished reply into something to show, rather than read.
+
+	A second pass, with no tools and nothing else to think about. The first
+	pass is a conversation: it decides what to do, calls what it needs and says
+	what happened. Asking it to do that *and* answer in a drawing language at
+	the same time is two jobs, and a small model does neither well — it ignored
+	the drawing rules entirely while tools were on the table. So the drawing is
+	its own call, the way reading an answer back already is.
+
+	It returns "" the moment anything is off, and the words are shown instead.
+	"""
+	instructions = getattr(frappe.local, "embark_ui_prompt", "")
+	if not instructions or not (reply or "").strip():
+		return ""
+	try:
+		out = _complete(
+			[
+				{"role": "system", "content": instructions},
+				{
+					"role": "user",
+					"content": (
+						"Write this answer as a program, following the rules above. "
+						"Keep the meaning and the wording; add nothing.\n\n" + reply
+					),
+				},
+			],
+			tools=[],
+		)
+	except Exception:
+		return ""
+
+	text = (out.get("text") or "").strip()
+	# A fenced block is the one thing it still does now and then.
+	if text.startswith("```"):
+		text = text.strip("`").split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+	return text if _ROOT.search(text) else ""
+
+
+# What a drawn answer has to start with, whatever else is around it.
+_ROOT = re.compile(r"\broot\s*=\s*[A-Z]\w*\s*\(")
+
+
+def _system() -> str:
+	"""The system prompt, plus whatever the screen asked for this turn.
+
+	Ask Embark can answer by drawing Embark's own controls rather than
+	describing them. The list of what it may draw is generated in the browser
+	from the component library itself, so a component added there is one the
+	model is told about here, with no second copy to keep in step.
+	"""
+	extra = getattr(frappe.local, "embark_ui_prompt", "")
+	return f"{SYSTEM_PROMPT}\n\n{extra}" if extra else SYSTEM_PROMPT
+
+
+def open_question_keys(onboarding: str, limit: int = 14) -> str:
+	"""The setup questions still open, so a drawn question can name a real one."""
+	from embark import wizard
+
+	try:
+		board = wizard.board(frappe.get_doc("Embark Onboarding", onboarding))
+	except Exception:
+		return ""
+	rows = [
+		f"{q['key']}: {q['label']}"
+		for task in board["tasks"]
+		for q in task["questions"]
+		if not q["answer"]
+	][:limit]
+	if not rows:
+		return ""
+	return "The setup questions still open, as key: question — use the key exactly:\n" + "\n".join(rows)
+
+
 def ask(
-	onboarding: str, message: str, history: list[dict] | None = None, file_url: str | None = None
+	onboarding: str,
+	message: str,
+	history: list[dict] | None = None,
+	file_url: str | None = None,
+	ui_prompt: str | None = None,
 ) -> dict:
 	"""One turn of the conversation, tools and all.
 
@@ -407,6 +485,10 @@ def ask(
 
 	if not is_on():
 		frappe.throw(_("The chat assistant is not set up on this site."))
+
+	if ui_prompt:
+		open_now = open_question_keys(onboarding)
+		frappe.local.embark_ui_prompt = f"{ui_prompt}\n\n{open_now}" if open_now else ui_prompt
 
 	if assistant_flow.available():
 		return assistant_flow.ask(onboarding, message, history, file_url)
@@ -981,7 +1063,7 @@ def _complete(messages: list[dict], tools: list[dict] | None = None) -> dict:
 def _openai(doc, key: str, messages: list[dict], tools: list[dict]) -> dict:
 	body = {
 		"model": doc.model,
-		"messages": [{"role": "system", "content": SYSTEM_PROMPT}, *messages],
+		"messages": [{"role": "system", "content": _system()}, *messages],
 		"temperature": 0,
 	}
 	if tools:
@@ -1006,7 +1088,7 @@ def _anthropic(doc, key: str, messages: list[dict], tools: list[dict]) -> dict:
 	body = {
 		"model": doc.model,
 		"max_tokens": 1024,
-		"system": SYSTEM_PROMPT,
+		"system": _system(),
 		"messages": _to_anthropic(messages),
 	}
 	if tools:
