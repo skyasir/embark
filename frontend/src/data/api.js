@@ -17,6 +17,53 @@ export function errorText(error) {
 	return messages.length ? messages.join(" ") : error?.message || "Something went wrong. Please try again."
 }
 
+/**
+ * A whitelisted method that answers with server-sent events, read piece by
+ * piece. `call` cannot do this — it waits for the whole body — so this is a
+ * plain fetch with Frappe's CSRF token, which is what `call` sends too.
+ *
+ * `onPiece` is given each piece as it lands; the promise settles when the
+ * stream ends.
+ */
+export async function stream(method, args, onPiece) {
+	const response = await fetch(`/api/method/${METHOD}${method}`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			// The same guard frappe-ui uses: on a page served without a
+			// session the placeholder is still sitting there unrendered.
+			"X-Frappe-CSRF-Token":
+				window.csrf_token && window.csrf_token !== "{{ csrf_token }}" ? window.csrf_token : "",
+		},
+		body: JSON.stringify(args),
+	})
+	if (!response.ok || !response.body) throw new Error(`${response.status} ${response.statusText}`)
+
+	const reader = response.body.getReader()
+	const decoder = new TextDecoder()
+	let buffer = ""
+	for (;;) {
+		const { done, value } = await reader.read()
+		if (done) break
+		buffer += decoder.decode(value, { stream: true })
+		// One event per blank line; a half-arrived one waits for the rest.
+		const events = buffer.split("\n\n")
+		buffer = events.pop() || ""
+		for (const event of events) {
+			const line = event.split("\n").find((l) => l.startsWith("data:"))
+			if (!line) continue
+			try {
+				const data = JSON.parse(line.slice(5))
+				if (data.done) return data
+				if (data.text) onPiece(data.text)
+			} catch {
+				// A piece that is not JSON is not a piece of the answer.
+			}
+		}
+	}
+	return { done: true }
+}
+
 export function templateUrl(area, onboarding) {
 	return (
 		`/api/method/${METHOD}download_template?area=${encodeURIComponent(area)}` +

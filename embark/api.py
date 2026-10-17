@@ -17,6 +17,7 @@ import json
 import frappe
 from frappe import _
 from frappe.utils import cstr, flt, get_fullname, validate_email_address
+from werkzeug.wrappers import Response
 
 from embark import assistant, configure, copilot, importer
 from embark import wizard as wizard_engine
@@ -194,9 +195,8 @@ def ask(
 		file_url=file_url,
 		ui_prompt=ui_prompt,
 	)
-	# What to show, if it can be shown. The words stay either way.
-	if ui_prompt:
-		out["ui"] = assistant.draw(out.get("reply") or "")
+	# The drawing is streamed separately, so the words arrive without waiting
+	# for it. `ui_prompt` here only tells the conversation what it may draw.
 	return out
 
 
@@ -676,6 +676,38 @@ def wizard_answer(question: str, value: str, onboarding: str | None = None) -> d
 		frappe.throw(_("This onboarding has been sent for review."))
 	wizard_engine.save_answer(doc, question, value)
 	return wizard_engine.board(doc)
+
+
+@frappe.whitelist(methods=["POST"])
+def draw(reply: str, ui_prompt: str, onboarding: str | None = None):
+	"""The same answer, drawn, streamed as it is written.
+
+	Frappe hands a Response straight back to the client untouched, so this is
+	server-sent events: one `data:` line per piece, and `done` at the end. The
+	browser renders each piece as it lands, which is what the drawing language
+	is built for — the shell appears first and fills in.
+	"""
+	doc = _get_onboarding(onboarding)
+	if _locked(doc):
+		frappe.throw(_("This onboarding has been sent for review."))
+	# Without the keys it has no way to name a real question, and it invents
+	# one — which draws a box that says the question is not being asked.
+	open_now = assistant.open_question_keys(doc.name)
+	frappe.local.embark_ui_prompt = f"{ui_prompt}\n\n{open_now}" if open_now else ui_prompt
+
+	def events():
+		drawn = False
+		for piece in assistant.draw_stream(reply):
+			drawn = True
+			# A newline would end the event, so the piece travels encoded.
+			yield f"data: {json.dumps({'text': piece})}\n\n"
+		yield f"data: {json.dumps({'done': True, 'drawn': drawn})}\n\n"
+
+	return Response(
+		events(),
+		mimetype="text/event-stream",
+		headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+	)
 
 
 @frappe.whitelist(methods=["POST"])

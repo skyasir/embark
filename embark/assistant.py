@@ -432,6 +432,73 @@ def draw(reply: str) -> str:
 	return text if _ROOT.search(text) else ""
 
 
+def draw_stream(reply: str):
+	"""The drawing pass, a piece at a time.
+
+	OpenUI re-parses on every chunk, so a program arriving in pieces draws
+	itself: the shell first, then each part as its line lands. That is the
+	whole reason to stream — not to watch words appear, but to watch the
+	answer assemble.
+
+	Yields the text as it comes. A provider that cannot stream, or a reply
+	that turns out not to be a program, yields nothing and the caller falls
+	back to the finished text.
+	"""
+	instructions = getattr(frappe.local, "embark_ui_prompt", "")
+	if not instructions or not (reply or "").strip():
+		return
+
+	doc = settings()
+	if doc.provider == "Anthropic" or not doc.base_url:
+		# One shape at a time: the OpenAI-compatible endpoint covers Ollama,
+		# Groq, OpenAI and Google. Anthropic draws in one go, as before.
+		drawn = draw(reply)
+		if drawn:
+			yield drawn
+		return
+
+	key = doc.get_password("api_key", raise_exception=False) or ""
+	body = {
+		"model": doc.model,
+		"messages": [
+			{"role": "system", "content": instructions},
+			{
+				"role": "user",
+				"content": (
+					"Write this answer as a program, following the rules above. "
+					"Keep the meaning and the wording; add nothing.\n\n" + reply
+				),
+			},
+		],
+		"temperature": 0,
+		"stream": True,
+	}
+	try:
+		with requests.post(
+			f"{doc.base_url.rstrip('/')}/chat/completions",
+			json=body,
+			headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"},
+			stream=True,
+			timeout=TIMEOUT,
+		) as response:
+			response.raise_for_status()
+			for line in response.iter_lines(decode_unicode=True):
+				if not line or not line.startswith("data:"):
+					continue
+				chunk = line[5:].strip()
+				if chunk == "[DONE]":
+					return
+				try:
+					delta = json.loads(chunk)["choices"][0].get("delta") or {}
+				except (ValueError, KeyError, IndexError):
+					continue
+				if delta.get("content"):
+					yield delta["content"]
+	except requests.RequestException as e:
+		frappe.log_error(f"Embark assistant (drawing): {e}", "Embark assistant")
+		return
+
+
 # What a drawn answer has to start with, whatever else is around it.
 _ROOT = re.compile(r"\broot\s*=\s*[A-Z]\w*\s*\(")
 
