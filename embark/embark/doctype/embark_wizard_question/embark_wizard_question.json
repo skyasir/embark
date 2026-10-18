@@ -72,7 +72,7 @@
    "fieldname": "answer_type",
    "fieldtype": "Select",
    "label": "Answer Type",
-   "options": "Text\nLong Text\nNumber\nDate\nSelect\nMultiple Choice\nYes / No\nLink",
+   "options": "Text\nLong Text\nNumber\nDate\nSelect\nMultiple Choice\nYes / No\nLink\nImage",
    "default": "Text",
    "reqd": 1
   },
@@ -124,7 +124,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-10-15 00:00:00.000000",
+ "modified": "2026-10-19 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Embark",
  "name": "Embark Wizard Question",

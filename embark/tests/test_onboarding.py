@@ -1591,3 +1591,43 @@ class TestChatDoesTheWork(TestCase):
 		# Asked twice, it does not pile up duplicates.
 		again = wizard.adopt(frappe.get_doc("Embark Onboarding", self.onboarding.name))
 		self.assertEqual(again, {}, "nothing left to take the second time")
+
+	def test_the_steps_run_in_the_order_an_implementation_does(self):
+		"""Not the order the question bank happens to be written in."""
+		from embark import wizard
+
+		live = frappe.get_all(
+			"Embark Wizard Task", filters={"is_active": 1}, fields=["name", "sequence"], order_by="sequence"
+		)
+		order = [t.name for t in live]
+		where = {name: n for n, name in enumerate(order)}
+
+		def before(earlier, later):
+			if earlier in where and later in where:
+				self.assertLess(where[earlier], where[later], f"{earlier} has to come before {later}")
+
+		# The modules decide everything, so they are first.
+		self.assertEqual(order[0], "Choose your modules")
+		# A company before the accounts that hang off it, and its books before
+		# the things that post to them.
+		before("Create a company", "Add your company address")
+		before("Create a company", "Set company default accounts")
+		before("Set your go-live dates", "Set company default accounts")
+		before("Set company default accounts", "Set up taxes")
+		before("Set up taxes", "Set up your bank account")
+		# Stock before what moves it; people and assets last.
+		before("Set up warehouses", "Set stock rules")
+		before("Set stock rules", "Organise your products")
+		before("Set selling rules", "Set up your organisation")
+		before("Set up your organisation", "Set up fixed assets")
+
+		# Every step the order names and the site has is placed by it.
+		placed = [t for t in wizard.STEP_ORDER if t in where]
+		self.assertEqual([where[t] for t in placed], sorted(where[t] for t in placed))
+
+	def test_the_company_has_a_logo_to_give(self):
+		"""It is on every document ERPNext prints."""
+		logo = frappe.db.get_value(
+			"Embark Wizard Question", "company_logo", ["task", "answer_type", "fieldname", "target_doctype"]
+		)
+		self.assertEqual(logo, ("Create a company", "Image", "company_logo", "Company"))

@@ -623,6 +623,47 @@ GATED_BY = {
 	"asset_location_name": "tracks_fixed_assets == yes",
 }
 
+# The order an implementation actually happens in, which is not the order the
+# question bank happens to be written in. Who the company is, then where it
+# is, then when its books start — and only then the accounts those books post
+# to. Stock before the things that move it; selling and buying before the
+# enquiries that feed them; people and assets last.
+#
+# A step not named here keeps its own sequence and falls in after these.
+STEP_ORDER = (
+	"Choose your modules",
+	# The company itself
+	"Create a company",
+	"Add your company address",
+	"Set your go-live dates",
+	# Its books
+	"Set company default accounts",
+	"Set up taxes",
+	"Set up cost centres",
+	"Set up your bank account",
+	"Set up credit terms",
+	"Set accounting rules",
+	# How it runs
+	"Set up holidays",
+	"Set up warehouses",
+	"Set stock rules",
+	"Organise your products",
+	"Set up quality checks",
+	"Organise customers and sales team",
+	"Set selling rules",
+	"Set buying rules",
+	"Set up enquiry tracking",
+	"Set production rules",
+	"Plan machine time",
+	"Set up projects",
+	# Its people and what it owns
+	"Set up your organisation",
+	"Set employee rules",
+	"Set payroll rules",
+	"Set up fixed assets",
+)
+
+
 # Steps that asked the customer what ERPNext decides for itself. A new site
 # arrives with 239 units of measure, and its timezone, date format and number
 # format set from the country it was made in. Asking for them again is asking
@@ -751,6 +792,14 @@ def seed():
 	bank_tasks, bank_questions = authored()
 	_seed("Embark Wizard Task", "task_name", bank_tasks, wording=True)
 	_seed("Embark Wizard Question", "question_key", bank_questions, wording=True)
+
+	# The order is decided here, in one place, whichever source a step came
+	# from. Without it a step seeded by this app sorts before a step from the
+	# bank, and the customer is asked for the company's default accounts
+	# before the company exists.
+	for n, task in enumerate(STEP_ORDER, start=1):
+		if frappe.db.exists("Embark Wizard Task", task):
+			frappe.db.set_value("Embark Wizard Task", task, "sequence", n * 10, update_modified=False)
 
 	# A step the bank now covers in its own words is switched off, not deleted,
 	# along with any question still sitting on it. A question the bank took
