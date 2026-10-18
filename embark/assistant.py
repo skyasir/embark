@@ -32,25 +32,19 @@ MAX_ROUNDS = 6
 QUESTIONS_AT_A_TIME = 4
 TIMEOUT = 60
 
-SYSTEM_PROMPT = """You are Embark's assistant. Embark gets a business's data ready before its ERPNext implementation, and you run that with them.
+SYSTEM_PROMPT = """You are Embark. You set up ERPNext for a business by asking them about it, and you do the work yourself rather than telling them where to click.
 
-Call where_am_i before your first reply in a conversation. Always. It tells you what is done, what is next and what is wrong, so you can lead instead of asking them what they want.
+You are told where things stand before every message. Never ask the customer where they are, what stage they are at, or what they would like to do — you already know, and asking it back is the one thing that makes you useless.
 
-The company details come first — the name, country, currency and financial year. If where_am_i says they are missing, ask for them before anything else; they are filled in on the Company details screen, not by you.
+The setup questions are the work. Each one fills a real field in ERPNext.
+1. If what they just said answers any open question, call answer_setup with it, in the same turn, before anything else.
+2. Then ask the next open question, in the words it is written in. One at a time.
+3. Save only what they actually said. Never guess, never invent a question or a choice, never answer for them.
+4. When every question in a step is answered, offer to build it, and call build_in_erpnext when they agree. Then say what it made.
 
-Then, while the interview is unanswered:
-1. Call open_questions.
-2. If what they just told you answers any of them, call save_answers with those answers in the same turn. Do this before you ask anything else.
-3. Then ask at most two of the remaining questions, in plain language, the way they are written.
-Save only what they actually said. Never guess an answer for them, never invent a question or a choice, and never answer on their behalf to move faster.
+If they ask something open — what is next, where are we, what is left — answer it from what you were told and ask the next question. Do not call a tool to find out what you already know.
 
-Once it is answered, the data steps are the work:
-- step_help says what a step wants. They can send a spreadsheet, or tell you the rows and you enter them with type_rows.
-- check_step after anything arrives, and say how it went like a person would: how many rows came through, and what is wrong in their words. Never say a code or a column name — "four customers have no GST number", not "4 REQUIRED_MISSING on tax_id".
-- Offer to fix what you can see. fix corrects one row, or every row with the same wrong value. Say what you are about to change before you change it, and never invent a value they have not given you.
-- match_column connects a heading in their file to the column it means, when it was not recognised.
-- A step with problems cannot go through. Fix them, or say plainly what they have to do, then move to the next step.
-- send_for_review when everything required is ready and they agree.
+Spreadsheets of their own data are a separate job: step_help says what a step wants, check_step says how it went, fix corrects a row. Only reach for these when they are sending you data, not during setup.
 
 How to speak: short, plain, warm. You are talking to a business owner, not a consultant. No ERPNext jargon, no field names, no tool names, no JSON. One or two sentences, then the next question."""
 
@@ -87,6 +81,49 @@ _CATALOGUE = [
 				}
 			},
 			"required": ["answers"],
+		},
+	},
+	{
+		"name": "open_setup_questions",
+		"description": (
+			"The setup questions still to answer, with the key to answer each by. "
+			"These are what actually configures ERPNext. Read them before asking anything."
+		),
+		"parameters": {
+			"type": "object",
+			"properties": {
+				"limit": {"type": "integer", "description": "How many to return. Six is usually plenty."}
+			},
+		},
+	},
+	{
+		"name": "answer_setup",
+		"description": (
+			"Save answers to setup questions. Use the key exactly as open_setup_questions gave it. "
+			"Save only what they actually said."
+		),
+		"parameters": {
+			"type": "object",
+			"properties": {
+				"answers": {
+					"type": "object",
+					"description": 'Key to answer, for example {"company_name": "Sunrise Traders Pvt Ltd"}.',
+					"additionalProperties": {"type": "string"},
+				}
+			},
+			"required": ["answers"],
+		},
+	},
+	{
+		"name": "build_in_erpnext",
+		"description": (
+			"Write a finished setup step into ERPNext. Only a step whose questions are all "
+			"answered can be built. Say what it made afterwards."
+		),
+		"parameters": {
+			"type": "object",
+			"properties": {"step": {"type": "string", "description": "The step's name, as given to you."}},
+			"required": ["step"],
 		},
 	},
 	{
@@ -194,6 +231,8 @@ TOOLS = {tool["name"]: tool for tool in _CATALOGUE}
 
 # Only the tools that make sense right now are offered. A model given twelve
 # choices picks worse than one given four — and so does a reader.
+# Four at a time, deliberately. A small model given a dozen tools picks none.
+WHILE_SETTING_UP = ("open_setup_questions", "answer_setup", "build_in_erpnext", "where_am_i")
 WHILE_ANSWERING = ("where_am_i", "open_questions", "save_answers", "show_plan")
 WHILE_COLLECTING = (
 	"where_am_i",
@@ -228,7 +267,16 @@ def tools_for(onboarding: str) -> list[dict]:
 	from embark.permissions import is_staff
 
 	o = api.get_overview(onboarding)
-	names = list(WHILE_ANSWERING if not o["interview"]["done"] else WHILE_COLLECTING)
+	# Setup comes first and is most of the work, so while any of it is open
+	# those are the tools. Only then do the data steps get a look in.
+	try:
+		unfinished = _setup_questions(onboarding, 1)["left"]
+	except Exception:
+		unfinished = 0
+	if unfinished:
+		names = list(WHILE_SETTING_UP)
+	else:
+		names = list(WHILE_ANSWERING if not o["interview"]["done"] else WHILE_COLLECTING)
 	if o["can_submit"]:
 		names.append("send_for_review")
 
@@ -503,6 +551,61 @@ def draw_stream(reply: str):
 _ROOT = re.compile(r"\broot\s*=\s*[A-Z]\w*\s*\(")
 
 
+def _setup_questions(onboarding: str, limit: int = 6, with_links: bool = False) -> dict:
+	"""The setup questions still open, with what each one accepts."""
+	from embark import wizard
+
+	board = wizard.board(frappe.get_doc("Embark Onboarding", onboarding))
+	# Stage order, not sequence order: the wizard asks who the company is
+	# first and the chat has to agree with it, or the two are asking different
+	# things at the same time.
+	stages = {stage["key"]: n for n, stage in enumerate(board["stages"])}
+	tasks = sorted(board["tasks"], key=lambda t: (stages.get(t["stage"], 99), t.get("sequence", 0)))
+	open_now = []
+	for task in tasks:
+		for q in task["questions"]:
+			if q["answer"]:
+				continue
+			one = {
+				"key": q["key"],
+				"question": q["label"],
+				"step": task["title"],
+				"type": q["type"],
+				"choices": [c["value"] for c in q["choices"]][:12],
+				"example": q["example"],
+			}
+			if with_links and q["type"] == "Link":
+				one["link_doctype"] = q["link_doctype"]
+			open_now.append(one)
+	return {
+		"questions": open_now[:limit],
+		"answered": board["answered"],
+		"total": board["total"],
+		"left": len(open_now),
+	}
+
+
+def standing(onboarding: str) -> str:
+	"""Where this onboarding stands, in a line, given before it is asked for.
+
+	The chat used to have to call a tool to find out, and a small model would
+	rather ask the customer than call anything — so it answered "could you
+	tell me where you are?" to someone who had opened it to be told. Handing
+	it the state removes the question.
+	"""
+	try:
+		state = _setup_questions(onboarding, 3)
+	except Exception:
+		return ""
+	if not state["left"]:
+		return "Every setup question is answered. What is left is building the steps in ERPNext."
+	nxt = "; ".join(f"{q['key']}: {q['question']}" for q in state["questions"])
+	return (
+		f"Where this stands: {state['answered']} of {state['total']} setup questions answered, "
+		f"{state['left']} still open. The next ones are — {nxt}"
+	)
+
+
 def _system() -> str:
 	"""The system prompt, plus whatever the screen asked for this turn.
 
@@ -562,6 +665,10 @@ def ask(
 
 	messages = _conversation(history)
 	asked = next((m["content"] for m in reversed(messages) if m["role"] == "assistant"), None)
+	# Where things stand, handed over rather than looked up.
+	here = standing(onboarding)
+	if here:
+		messages.append({"role": "system", "content": here})
 	messages.append({"role": "user", "content": message})
 	if file_url:
 		messages.append({"role": "user", "content": _attached(onboarding, file_url)})
@@ -569,7 +676,9 @@ def ask(
 	used: list[str] = []
 	steps: list[dict] = []
 	pending: list[dict] = []
-	tools = tools_for(onboarding) + studio_tools()
+	tools = tools_for(onboarding)
+	if not any(t["name"] == "answer_setup" for t in tools):
+		tools += studio_tools()
 	nudged = False
 	for _round in range(MAX_ROUNDS):
 		reply = _complete(messages, tools)
@@ -725,6 +834,144 @@ def _noted(onboarding: str, caught: dict) -> str:
 	return _("I have put you down for this — tell me if any of it is wrong:") + "\n" + "\n".join(lines)
 
 
+def question_labels(answers: dict) -> list[tuple[str, str]]:
+	"""Each saved answer as the question it answered, for saying so out loud."""
+	out = []
+	for key, value in (answers or {}).items():
+		label = frappe.db.get_value("Embark Wizard Question", key, "label") or key
+		out.append((label.rstrip("?"), value))
+	return out
+
+
+def catch_up_setup(onboarding: str, said: str, asked: str | None = None) -> dict:
+	"""What the customer just said, mapped onto the open setup questions.
+
+	The same trick as the interview's catch-up, for the questions that now do
+	the work. One call, no tools, JSON out: a small model is poor at deciding
+	*when* to call a tool and good at reading one sentence and saying what it
+	answers. So the conversation is left to do the talking and this makes sure
+	nothing said is lost.
+
+	Everything is checked against the real questions and their real choices
+	before it is saved, and anything not plainly stated is dropped.
+	"""
+	if not (said or "").strip():
+		return {}
+	open_now = _setup_questions(onboarding, 40, with_links=True)["questions"]
+	if not open_now:
+		return {}
+
+	listed = []
+	for q in open_now:
+		allowed = ", ".join(q["choices"]) if q["choices"] else ("yes, no" if q["type"] == "Yes / No" else "free text")
+		listed.append(f'- {q["key"]} ("{q["question"]}"): {allowed}')
+	prompt = (
+		"These setup questions are open:\n"
+		+ "\n".join(listed)
+		+ "\n\n"
+		+ (f'The assistant had just asked: "{asked}"\n' if asked else "")
+		+ f'The customer replied: "{said}"\n\n'
+		'Which of those does that reply answer? Answer with JSON only, no other words: '
+		'{"<question key>": "<the answer>"}. Where the question lists choices, use one of them '
+		"exactly; where it says free text, use the customer's own words.\n"
+		"Be strict. Include a question only if the reply says its answer outright. Do not work it "
+		"out from the kind of business they are and do not fill in what is likely. Leaving a "
+		"question out is always safe; inventing an answer is not. If it answers none, return {}."
+	)
+	try:
+		reply = _complete([{"role": "user", "content": prompt}], tools=[])
+	except Exception:
+		return {}
+	known = {row.question: row.value for row in frappe.get_doc("Embark Onboarding", onboarding).wizard_answers}
+	return _real_setup_answers(_json_object(reply.get("text") or ""), open_now, known)
+
+
+def _real_setup_answers(data: dict, open_now: list[dict], known: dict | None = None) -> dict:
+	"""Only keys that are being asked, and only values those questions accept."""
+	by_key = {q["key"]: q for q in open_now}
+	out = {}
+	for key, value in (data or {}).items():
+		question = by_key.get(key)
+		if not question or not isinstance(value, str) or not value.strip():
+			continue
+		value = value.strip()
+		kind, choices = question["type"], question["choices"]
+		if kind == "Yes / No":
+			if value.lower() in ("yes", "true", "1"):
+				out[key] = "Yes"
+			elif value.lower() in ("no", "false", "0"):
+				out[key] = "No"
+		elif kind == "Multiple Choice":
+			picked = [v.strip() for v in value.split(",") if v.strip() in choices]
+			if picked:
+				out[key] = ",".join(picked)
+		elif choices:
+			if value in choices:
+				out[key] = value
+		elif kind == "Number":
+			if value.replace(".", "", 1).isdigit():
+				out[key] = value
+		elif kind == "Link":
+			# "rupees" is not a Currency. A link that names no record would be
+			# saved happily and then fail the moment the step is built, so it
+			# is resolved here or dropped.
+			found = _link_match(question.get("link_doctype"), value, {**(known or {}), **out})
+			if found:
+				out[key] = found
+		else:
+			out[key] = value
+	return out
+
+
+def _link_match(doctype: str | None, value: str, known: dict | None = None) -> str:
+	"""The record this answer means, by name or by what it is called.
+
+	People say "rupees", not "INR", and a Currency is named by its code. So
+	the record is looked for by its name, then by whatever it calls itself —
+	a Currency's currency_name is "Rupee" — and singular or plural either way.
+	One match counts; two mean it was not clear enough to guess.
+	"""
+	if not doctype or not frappe.db.exists("DocType", doctype):
+		return ""
+	if frappe.db.exists(doctype, value):
+		return value
+
+	meta = frappe.get_meta(doctype)
+	tried = {value, value.rstrip("s")} if len(value) > 3 else {value}
+	fields = [f for f in (meta.title_field, "currency_name", f"{frappe.scrub(doctype)}_name") if f and meta.get_field(f)]
+
+	several = []
+	for word in tried:
+		for field in ["name", *fields]:
+			found = frappe.get_all(doctype, filters={field: ("like", f"%{word}%")}, pluck="name", limit=6)
+			if len(found) == 1:
+				return found[0]
+			several += found
+
+	# A Currency record is named by its code and calls itself by its code, so
+	# nothing in the table says "rupee". Frappe's own country data does, and a
+	# customer who has said where they are has already said which rupee they
+	# mean. It is only accepted when the word really is that country's money —
+	# "dollars" in India stays unanswered rather than becoming INR.
+	if doctype == "Currency" and (known or {}).get("company_country"):
+		code, called = _money_of(known["company_country"])
+		word = value.lower().rstrip("s")
+		if code and word and (word in called.lower() or word == code.lower()):
+			return code
+	return several[0] if len(set(several)) == 1 else ""
+
+
+def _money_of(country: str) -> tuple[str, str]:
+	"""A country's currency and what it is called, as Frappe already knows."""
+	try:
+		from frappe.geo.country_info import get_country_info
+
+		info = get_country_info(country) or {}
+		return info.get("currency") or "", info.get("currency_name") or ""
+	except Exception:
+		return "", ""
+
+
 def _catch_up(onboarding: str, said: str, asked: str | None) -> dict:
 	"""Map what the customer just said onto the questions still open.
 
@@ -863,6 +1110,33 @@ def _run_tool(onboarding: str, name: str, arguments: dict, pending: list[dict] |
 
 	if name == "where_am_i":
 		return _where_am_i(onboarding)
+
+	if name == "open_setup_questions":
+		return _setup_questions(onboarding, int(arguments.get("limit") or 6))
+
+	if name == "answer_setup":
+		given = arguments.get("answers") or {}
+		if not isinstance(given, dict) or not given:
+			return {"error": "Nothing to save. Give the answers as key to value."}
+		doc = frappe.get_doc("Embark Onboarding", onboarding)
+		from embark import wizard
+
+		known = {q["key"] for q in _setup_questions(onboarding, 200)["questions"]}
+		unknown = [key for key in given if key not in known]
+		if unknown:
+			return {"error": f"Not a question being asked: {', '.join(unknown)}."}
+		wizard.save_answers(doc, {k: str(v or "") for k, v in given.items()})
+		return {"saved": list(given), "left": _setup_questions(onboarding, 3)["questions"]}
+
+	if name == "build_in_erpnext":
+		from embark import wizard
+
+		doc = frappe.get_doc("Embark Onboarding", onboarding)
+		step = (arguments.get("step") or "").strip()
+		if not frappe.db.exists("Embark Wizard Task", step):
+			return {"error": f"There is no step called {step}."}
+		out = wizard.apply(doc, step)
+		return {"built": [{"kind": r["doctype"], "name": r["name"]} for r in out.get("records") or []]}
 
 	if name == "open_questions":
 		interview = api.get_interview(onboarding)

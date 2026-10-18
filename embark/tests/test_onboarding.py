@@ -104,6 +104,33 @@ class TestOnboardingFlow(TestCase):
 		frappe.local.conf.pop("embark_engine", None)
 		frappe.db.rollback()
 
+	def answer_setup(self):
+		"""Answer every setup question, the way a customer eventually would."""
+		from embark import wizard
+
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		for _round in range(40):
+			board = wizard.board(doc)
+			todo = {}
+			for task in board["tasks"]:
+				for q in task["questions"]:
+					if q["answer"]:
+						continue
+					if q["type"] == "Multiple Choice":
+						todo[q["key"]] = ",".join(c["value"] for c in q["choices"])
+					elif q["choices"]:
+						todo[q["key"]] = q["choices"][0]["value"]
+					elif q["type"] == "Number":
+						todo[q["key"]] = "1"
+					elif q["type"] == "Date":
+						todo[q["key"]] = "2026-04-01"
+					else:
+						todo[q["key"]] = "Something"
+			if not todo:
+				return
+			wizard.save_answers(doc, todo)
+			doc.reload()
+
 	def answer_interview(self, **answers):
 		"""Answer every question that gets asked, following the branches."""
 		while True:
@@ -755,16 +782,20 @@ class TestOnboardingFlow(TestCase):
 
 	def test_the_chat_only_offers_the_tools_that_fit_where_you_are(self):
 		"""Twelve choices is how a model goes wrong. It gets the ones that apply."""
+		# Setting the site up comes first and is most of the work, so while any
+		# of it is open those are the tools and the data tools wait their turn.
 		names = {t["name"] for t in assistant.tools_for(self.onboarding.name)}
-		self.assertIn("open_questions", names)
-		self.assertNotIn("check_step", names, "data tools before the interview is answered")
+		self.assertIn("answer_setup", names)
+		self.assertNotIn("check_step", names, "data tools while the site is still being set up")
 		self.assertNotIn("send_for_review", names)
+		self.assertLessEqual(len(names), 5, f"too many to choose between: {names}")
 
+		self.answer_setup()
 		self.answer_interview()
 		names = {t["name"] for t in assistant.tools_for(self.onboarding.name)}
 		self.assertIn("check_step", names)
 		self.assertIn("fix", names)
-		self.assertNotIn("open_questions", names, "nothing left to ask")
+		self.assertNotIn("answer_setup", names, "nothing left to set up")
 		# Sending is offered only when there is something to send.
 		self.assertNotIn("send_for_review", names)
 
@@ -960,6 +991,7 @@ class TestOnboardingFlow(TestCase):
 		from embark import assistant_flow
 
 		self.chat_on()
+		self.answer_setup()
 		self.answer_interview()
 
 		class Call:
@@ -1416,3 +1448,90 @@ class TestSetupWizard(TestCase):
 		allowed = allowed_doctypes()
 		for doctype in ("Sales Invoice", "Stock Entry", "Payment Entry", "User", "Journal Entry"):
 			self.assertNotIn(doctype, allowed, doctype)
+
+
+class TestChatDoesTheWork(TestCase):
+	"""The chat has to act on what it is told, not describe the process.
+
+	These are the deterministic half: no model is called except where one is
+	stubbed. The other half is embark/tests/chat_harness.py, which talks to a
+	real model and reports what it actually did.
+	"""
+
+	def setUp(self):
+		frappe.set_user("Administrator")
+		frappe.db.delete("Embark Onboarding")
+		self.onboarding = frappe.get_doc(
+			{"doctype": "Embark Onboarding", "client_name": "Chat Traders", "consultant": "Administrator"}
+		).insert()
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		frappe.local.conf.pop("embark_engine", None)
+		frappe.db.rollback()
+
+	def open_keys(self):
+		return {q["key"] for q in assistant._setup_questions(self.onboarding.name, 200)["questions"]}
+
+	def test_the_setup_tools_are_the_ones_on_the_table(self):
+		"""While setup is unfinished it is setup tools, and few of them."""
+		names = [t["name"] for t in assistant.tools_for(self.onboarding.name)]
+		self.assertIn("open_setup_questions", names)
+		self.assertIn("answer_setup", names)
+		self.assertLessEqual(len(names), 5, f"too many tools for a small model: {names}")
+
+	def test_it_is_told_where_things_stand_before_it_is_asked(self):
+		"""The question it used to hand back is answered before it is put."""
+		line = assistant.standing(self.onboarding.name)
+		self.assertIn("setup questions answered", line)
+		self.assertIn("company_name", line, "the next question has to be named, not described")
+
+	def test_an_answer_is_kept_only_if_it_is_really_an_answer(self):
+		open_now = assistant._setup_questions(self.onboarding.name, 200)["questions"]
+		kept = assistant._real_setup_answers(
+			{
+				"company_name": "Chat Traders Pvt Ltd",
+				"valuation_method": "Whatever We Feel Like",
+				"not_a_question": "x",
+				"modules": "accounts,selling",
+			},
+			open_now,
+		)
+		self.assertEqual(kept.get("company_name"), "Chat Traders Pvt Ltd", "free text is taken as given")
+		self.assertNotIn("valuation_method", kept, "a choice that does not exist is not a choice")
+		self.assertNotIn("not_a_question", kept, "a question nobody asked is not answered")
+		self.assertEqual(kept.get("modules"), "accounts,selling", "several choices are kept together")
+
+	def test_what_someone_calls_their_money_is_resolved_or_dropped(self):
+		"""'Rupees' is five currencies; where they are says which."""
+		india = {"company_country": "India"}
+		self.assertEqual(assistant._link_match("Currency", "rupees", india), "INR")
+		self.assertEqual(assistant._link_match("Currency", "INR", india), "INR")
+		# Never guessed: saying dollars in India does not make it rupees.
+		self.assertEqual(assistant._link_match("Currency", "dollars", india), "")
+		self.assertEqual(assistant._link_match("Currency", "rupees", {}), "")
+
+	def test_what_they_said_is_saved_even_when_the_model_saves_nothing(self):
+		"""The failure that made the chat useless: a pleasant reply, nothing written."""
+		frappe.local.conf["embark_engine"] = "embark"
+		said = "The company is called Chat Traders Private Limited."
+
+		def pleasant(messages, tools=None):
+			# The conversation says something nice and calls nothing.
+			if tools:
+				return {"text": "Lovely, thank you!", "tool_calls": [], "raw": {}}
+			# The catch-up reads the same sentence on its own.
+			return {
+				"text": '{"company_name": "Chat Traders Private Limited"}',
+				"tool_calls": [],
+				"raw": {},
+			}
+
+		with patch.object(assistant, "_complete", side_effect=pleasant):
+			out = api.ask(message=said, onboarding=self.onboarding.name)
+
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		kept = {row.question: row.value for row in doc.wizard_answers}
+		self.assertEqual(kept.get("company_name"), "Chat Traders Private Limited")
+		self.assertIn("answer_setup", [s["tool"] for s in out["steps"]], "it has to say that it saved")
+		self.assertIn("put you down", out["reply"], "a saved guess must be visible to be correctable")
