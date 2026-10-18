@@ -883,6 +883,7 @@ def board(doc) -> dict:
 				"task": task.name,
 				"title": task.task_name,
 				"stage": task.stage or "Setup",
+				"sequence": task.sequence or 0,
 				"icon": task.icon,
 				"doctype": task.target_doctype,
 				"is_single": bool(task.is_single),

@@ -88,7 +88,13 @@ def ask(
 		max_iterations=assistant.MAX_ROUNDS,
 	)
 
-	turns = [*(assistant._conversation(history) or []), {"role": "user", "content": message}]
+	# Where things stand goes in before the question, so it never has to ask.
+	here = assistant.standing(onboarding)
+	turns = [
+		*(assistant._conversation(history) or []),
+		*([{"role": "system", "content": here}] if here else []),
+		{"role": "user", "content": message},
+	]
 	if file_url:
 		turns.append({"role": "user", "content": assistant._attached(onboarding, file_url)})
 	asked = next((m["content"] for m in reversed(turns[:-1]) if m["role"] == "assistant"), None)
@@ -128,6 +134,21 @@ def _functions(onboarding: str) -> list:
 		"""Where this onboarding stands: the interview, every step with its state
 		and problems, and what to do next. Start here."""
 		return run("where_am_i")
+
+	def open_setup_questions(limit: int = 6) -> dict:
+		"""The setup questions still to answer, with the key to answer each by.
+		These are what actually configures ERPNext."""
+		return run("open_setup_questions", limit=limit)
+
+	def answer_setup(answers: dict) -> dict:
+		"""Save answers to setup questions. Keys are the keys from
+		open_setup_questions. Save only what the customer actually said."""
+		return run("answer_setup", answers=answers)
+
+	def build_in_erpnext(step: str) -> dict:
+		"""Write a finished setup step into ERPNext, once all its questions are
+		answered and the customer agrees."""
+		return run("build_in_erpnext", step=step)
 
 	def open_questions() -> dict:
 		"""The interview questions that still need an answer, with the allowed choices."""
@@ -193,6 +214,9 @@ def _functions(onboarding: str) -> list:
 
 	return [
 		where_am_i,
+		open_setup_questions,
+		answer_setup,
+		build_in_erpnext,
 		open_questions,
 		save_answers,
 		show_plan,

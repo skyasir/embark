@@ -195,6 +195,7 @@ def ask(
 		file_url=file_url,
 		ui_prompt=ui_prompt,
 	)
+	_catch_up_setup(doc, message, out)
 	# The drawing is streamed separately, so the words arrive without waiting
 	# for it. `ui_prompt` here only tells the conversation what it may draw.
 	return out
@@ -676,6 +677,45 @@ def wizard_answer(question: str, value: str, onboarding: str | None = None) -> d
 		frappe.throw(_("This onboarding has been sent for review."))
 	wizard_engine.save_answer(doc, question, value)
 	return wizard_engine.board(doc)
+
+
+def _catch_up_setup(doc, message: str, out: dict) -> None:
+	"""Save what the customer said, whatever the model decided to do about it.
+
+	Both engines run the conversation; neither reliably remembers to write an
+	answer down. So after the turn, if nothing was saved, the message is read
+	once more on its own — no tools, no conversation — and anything it plainly
+	answers is saved. The reply then says what was written down, because a
+	guess the customer cannot see is a guess they cannot correct.
+	"""
+	from embark import wizard
+
+	# It runs whether or not the turn saved something. A model that writes one
+	# answer down and forgets the other half of the same sentence is the common
+	# case, not the rare one — and because this reads only the questions still
+	# open, anything already saved is not in front of it to save twice.
+	steps = out.get("steps") or []
+	history = out.get("reply") or ""
+	caught = assistant.catch_up_setup(doc.name, message, None)
+	if not caught:
+		return
+
+	# The turn's own tools may already have written to this document, so the
+	# copy loaded before the conversation is stale by now.
+	wizard.save_answers(frappe.get_doc("Embark Onboarding", doc.name), caught)
+	labels = assistant.question_labels(caught)
+	out["steps"] = [
+		*steps,
+		{
+			"tool": "answer_setup",
+			"label": _("Saved {0} answers").format(len(caught)) if len(caught) != 1 else _("Saved your answer"),
+			"arguments": {"answers": caught},
+			"outcome": _("Done"),
+			"failed": False,
+		},
+	]
+	noted = "; ".join(f"{label} — {value}" for label, value in labels)
+	out["reply"] = (history.rstrip() + "\n\n" + _("I have put you down for {0}.").format(noted)).strip()
 
 
 @frappe.whitelist(methods=["POST"])
