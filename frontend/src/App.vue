@@ -84,9 +84,12 @@
 			<main class="flex-1 overflow-y-auto">
 				<!-- The wizard lays out its own three columns and needs the whole
 				     width; everything else reads better in a column. -->
+				<!-- A page that fills the window wants its edges, not a margin:
+				     the strip above the panes was doing nothing but pushing
+				     ERPNext down. A page that reads in a column keeps its air. -->
 				<div
-					class="mx-auto w-full px-5 py-8"
-					:class="wide ? 'h-full max-w-none' : 'max-w-3xl'"
+					class="mx-auto w-full px-5"
+					:class="wide ? 'h-full max-w-none py-3' : 'max-w-3xl py-8'"
 				>
 					<div v-if="state.loading" class="flex justify-center py-24">
 						<LoadingIndicator class="size-6 text-ink-gray-5" />
