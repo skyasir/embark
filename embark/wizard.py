@@ -621,6 +621,18 @@ GATED_BY = {
 	"frequency_of_depreciation": "tracks_fixed_assets == yes",
 	"book_depreciation_automatically": "tracks_fixed_assets == yes",
 	"asset_location_name": "tracks_fixed_assets == yes",
+	"opening_trial_balance": "needs_opening_balances == yes",
+	"opening_receivables": "needs_opening_balances == yes",
+	"opening_payables": "needs_opening_balances == yes",
+	"discount_approval_above": "needs_approvals == yes",
+	"purchase_approval_above": "needs_approvals == yes",
+	"approver_role": "needs_approvals == yes",
+	"volume_discounts": "gives_discounts == yes",
+	"landed_cost_from_invoice": "adds_landed_cost == yes",
+	"uses_job_cards": "tracks_operations == yes",
+	"job_card_excess_transfer": "tracks_operations == yes",
+	"paid_leave_days": "works_shifts == yes or attendance_capture == Biometric machine",
+	"terms_text": "",
 }
 
 # The order an implementation actually happens in, which is not the order the
@@ -636,31 +648,43 @@ STEP_ORDER = (
 	"Create a company",
 	"Add your company address",
 	"Set your go-live dates",
+	"Set up your printed documents",
 	# Its books
+	"Bring in your opening balances",
 	"Set company default accounts",
+	"Keep the books straight",
 	"Set up taxes",
 	"Set up cost centres",
 	"Set up your bank account",
 	"Set up credit terms",
 	"Set accounting rules",
+	"Decide who approves what",
 	# How it runs
 	"Set up holidays",
 	"Set up warehouses",
 	"Set stock rules",
+	"Count and control stock",
 	"Organise your products",
 	"Set up quality checks",
 	"Organise customers and sales team",
 	"Set selling rules",
+	"Set your pricing and discount policy",
 	"Set buying rules",
+	"Set your buying process",
 	"Set up enquiry tracking",
 	"Set production rules",
 	"Plan machine time",
+	"Track the shop floor",
 	"Set up projects",
 	# Its people and what it owns
 	"Set up your organisation",
 	"Set employee rules",
+	"Decide how attendance and leave work",
 	"Set payroll rules",
 	"Set up fixed assets",
+	# The switch itself, once everything it needs is known.
+	"Decide who uses ERPNext",
+	"Plan the switch over",
 )
 
 
@@ -712,6 +736,17 @@ ICONS = {
 	"Set employee rules": "user-check",
 	"Set payroll rules": "credit-card",
 	"Set up fixed assets": "box",
+	"Set up your printed documents": "file-text",
+	"Decide who uses ERPNext": "users",
+	"Plan the switch over": "flag",
+	"Bring in your opening balances": "download",
+	"Keep the books straight": "book",
+	"Decide who approves what": "shield",
+	"Set your pricing and discount policy": "tag",
+	"Set your buying process": "truck",
+	"Count and control stock": "clipboard",
+	"Track the shop floor": "tool",
+	"Decide how attendance and leave work": "calendar",
 }
 
 

@@ -1430,11 +1430,13 @@ class TestSetupWizard(TestCase):
 		from embark.embark.doctype.embark_change_set.embark_change_set import allowed_doctypes
 
 		allowed = allowed_doctypes()
+		# Only the questions that fill a field: one that merely names a doctype
+		# to say what it is about writes nothing and must not widen the guard.
 		asked = {
 			q.target_doctype
 			for q in frappe.get_all(
 				"Embark Wizard Question",
-				filters={"is_active": 1, "target_doctype": ("is", "set")},
+				filters={"is_active": 1, "target_doctype": ("is", "set"), "fieldname": ("is", "set")},
 				fields=["target_doctype"],
 			)
 		}
