@@ -623,6 +623,17 @@ GATED_BY = {
 	"asset_location_name": "tracks_fixed_assets == yes",
 }
 
+# Steps that asked the customer what ERPNext decides for itself. A new site
+# arrives with 239 units of measure, and its timezone, date format and number
+# format set from the country it was made in. Asking for them again is asking
+# somebody to do the computer's work and then checking their answer with it.
+ALREADY_DECIDED = (
+	"Create a unit of measure",
+	"Set the system timezone",
+	"Set date and number format",
+	"Set currency and float precision",
+)
+
 # A step the question bank now covers in its own words. Switched off rather
 # than deleted, so a site that has answered one keeps the answer.
 SUPERSEDED = (
@@ -744,7 +755,7 @@ def seed():
 	# A step the bank now covers in its own words is switched off, not deleted,
 	# along with any question still sitting on it. A question the bank took
 	# over has already moved, so what is left here is what it did not want.
-	for task in SUPERSEDED:
+	for task in SUPERSEDED + ALREADY_DECIDED:
 		if not frappe.db.exists("Embark Wizard Task", task):
 			continue
 		frappe.db.set_value("Embark Wizard Task", task, "is_active", 0)
@@ -804,6 +815,54 @@ def _seed(doctype: str, key: str, rows: list[dict], wording: bool = False) -> No
 			doc.save(ignore_permissions=True)
 
 
+def adopt(doc) -> dict:
+	"""Take what the site already holds as the answers to the questions about it.
+
+	A question like "which timezone does the business run in?" has an answer
+	sitting in ERPNext already, put there when the site was made. Asking it
+	again is asking somebody to tell the computer what the computer told them.
+
+	So any question still open whose field already has a value is answered from
+	the site and marked as such. The customer sees what it says and changes it
+	if it is wrong, instead of typing it out to be checked.
+
+	Only settings and the company are read this way. "What is one of your
+	warehouses?" is a question about a record to make, not a field to read.
+	"""
+	answered = {row.question for row in doc.wizard_answers}
+	# company_name is what the customer is called, which is not always the name
+	# of a Company record — reading fields off it then quietly finds nothing.
+	company = doc.company_name if frappe.db.exists("Company", doc.company_name) else None
+	company = company or frappe.db.get_value("Company", {}, "name", order_by="creation asc")
+
+	taken = {}
+	for q in frappe.get_all(
+		"Embark Wizard Question",
+		filters={"is_active": 1},
+		fields=["name", "fieldname", "target_doctype"],
+	):
+		if q.name in answered or not q.fieldname or not q.target_doctype:
+			continue
+		if not frappe.db.exists("DocType", q.target_doctype):
+			continue
+		meta = frappe.get_meta(q.target_doctype)
+		if meta.issingle:
+			value = frappe.db.get_single_value(q.target_doctype, q.fieldname)
+		elif q.target_doctype == "Company" and company:
+			value = frappe.db.get_value("Company", company, q.fieldname)
+		else:
+			continue
+		if value in (None, "", 0):
+			continue
+		taken[q.name] = str(value)
+
+	for question, value in taken.items():
+		doc.append("wizard_answers", {"question": question, "value": value, "source": "From the site"})
+	if taken:
+		doc.save(ignore_permissions=True)
+	return taken
+
+
 def board(doc) -> dict:
 	"""The whole wizard: every task, its questions, and what has been answered.
 
@@ -812,6 +871,7 @@ def board(doc) -> dict:
 	without reaching into anything else.
 	"""
 	answers = {row.question: row.value for row in doc.wizard_answers}
+	sources = {row.question: row.get("source") for row in doc.wizard_answers}
 
 	tasks, answered, total = [], 0, 0
 	for task in frappe.get_all(
@@ -870,6 +930,7 @@ def board(doc) -> dict:
 					"link_doctype": _link_doctype(q, target),
 					"required": bool(q.is_required),
 					"answer": answers.get(q.name, ""),
+					"from_site": sources.get(q.name) == "From the site",
 				}
 			)
 

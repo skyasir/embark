@@ -55,7 +55,8 @@
 							<div class="mt-2">
 								<AnswerField v-model="form[q.key]" :question="q" />
 							</div>
-							<p v-if="q.example" class="mt-1.5 font-mono text-sm text-ink-gray-4">e.g. {{ q.example }}</p>
+							<p v-if="q.from_site" class="mt-1.5 text-sm text-ink-gray-5">From your ERPNext site.</p>
+							<p v-else-if="q.example" class="mt-1.5 font-mono text-sm text-ink-gray-4">e.g. {{ q.example }}</p>
 						</div>
 					</div>
 				</div>
@@ -200,6 +201,18 @@
 							<span class="text-sm text-ink-gray-5">Doctype:</span>
 							<Badge theme="blue" size="sm" :label="current.doctype || currentTask.doctype" />
 							<span v-if="current.field" class="font-mono text-sm text-ink-gray-5">{{ current.field }}</span>
+						</div>
+
+						<!-- Taken from the site, not asked for. Said plainly, because
+						     an answer nobody gave is one nobody has checked. -->
+						<div
+							v-if="current.from_site"
+							class="mt-4 flex items-start gap-2 rounded-lg border border-outline-gray-2 bg-surface-gray-1 px-3 py-2"
+						>
+							<FeatherIcon name="download" class="mt-0.5 size-3.5 shrink-0 text-ink-gray-5" />
+							<p class="text-sm leading-relaxed text-ink-gray-6">
+								ERPNext already had this, so it is filled in from your site. Change it if it is wrong.
+							</p>
 						</div>
 
 						<div

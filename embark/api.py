@@ -666,8 +666,15 @@ def configure_all(onboarding: str) -> dict:
 
 @frappe.whitelist()
 def wizard(onboarding: str | None = None) -> dict:
-	"""Every task, its questions, and what has been answered so far."""
+	"""Every task, its questions, and what has been answered so far.
+
+	Anything the site has already decided for itself is read off it first, so
+	the customer is never asked to type in what ERPNext put there when the
+	site was made.
+	"""
 	doc = _get_onboarding(onboarding)
+	if not _locked(doc):
+		wizard_engine.adopt(doc)
 	return wizard_engine.board(doc)
 
 

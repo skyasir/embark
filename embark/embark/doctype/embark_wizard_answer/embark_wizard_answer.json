@@ -6,7 +6,8 @@
  "engine": "InnoDB",
  "field_order": [
   "question",
-  "value"
+  "value",
+  "source"
  ],
  "fields": [
   {
@@ -22,11 +23,19 @@
    "fieldtype": "Small Text",
    "label": "Answer",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "source",
+   "fieldtype": "Select",
+   "label": "Where it came from",
+   "options": "Answered\nFrom the site",
+   "default": "Answered",
+   "description": "Answers taken from what ERPNext already holds are marked, so nobody is told they said something they did not."
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-10-14 00:00:00.000000",
+ "modified": "2026-10-19 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Embark",
  "name": "Embark Wizard Answer",

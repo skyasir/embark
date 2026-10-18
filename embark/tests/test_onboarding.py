@@ -1564,3 +1564,30 @@ class TestChatDoesTheWork(TestCase):
 		# A reply that is not a list is left exactly as it was.
 		plain = "Right — what is the company's full legal name?"
 		self.assertEqual(assistant.one_question(self.onboarding.name, plain), plain)
+
+	def test_what_erpnext_already_decided_is_not_asked(self):
+		"""A new site arrives with its timezone, formats and units set."""
+		from embark import wizard
+
+		live = frappe.get_all("Embark Wizard Task", filters={"is_active": 1}, pluck="name")
+		for retired in wizard.ALREADY_DECIDED:
+			self.assertNotIn(retired, live, f"{retired} asks what the site already decided")
+		self.assertEqual(frappe.db.count("Embark Wizard Question", {"task": "Create a unit of measure", "is_active": 1}), 0)
+
+	def test_an_answer_the_site_already_holds_is_taken_not_asked(self):
+		"""Nobody should type in what ERPNext put there when the site was made."""
+		from embark import wizard
+
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		taken = wizard.adopt(doc)
+		self.assertTrue(taken, "the site holds answers and none were taken")
+
+		board = wizard.board(frappe.get_doc("Embark Onboarding", self.onboarding.name))
+		shown = {q["key"]: q for t in board["tasks"] for q in t["questions"]}
+		one = next(key for key in taken if key in shown)
+		self.assertTrue(shown[one]["from_site"], "an adopted answer has to say where it came from")
+		self.assertEqual(shown[one]["answer"], taken[one])
+
+		# Asked twice, it does not pile up duplicates.
+		again = wizard.adopt(frappe.get_doc("Embark Onboarding", self.onboarding.name))
+		self.assertEqual(again, {}, "nothing left to take the second time")
