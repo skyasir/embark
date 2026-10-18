@@ -37,6 +37,14 @@ def answers_of(onboarding):
 
 SCENARIOS = [
 	{
+		"say": "hi",
+		"expect": "a greeting and one question, not the whole wizard",
+		"check": lambda reply, steps, before, after: (
+			reply.count("?") <= 2 and len(reply) < 500 and not _is_a_list(reply),
+			f"{len(reply)} chars, {reply.count('?')} questions, list={_is_a_list(reply)}",
+		),
+	},
+	{
 		"say": "What should I do next?",
 		"expect": "asks a real setup question rather than asking the customer where they are",
 		"check": lambda reply, steps, before, after: (
@@ -69,6 +77,13 @@ SCENARIOS = [
 		),
 	},
 ]
+
+
+def _is_a_list(reply):
+	"""A wall of questions, which is what "hi" used to get you."""
+	import re
+
+	return len(re.findall(r"^\s*(?:[-*\u2022]|\d+[.)])\s+", reply or "", re.MULTILINE)) >= 2
 
 
 def _asks_where(reply):

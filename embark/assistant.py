@@ -38,7 +38,11 @@ You are told where things stand before every message. Never ask the customer whe
 
 The setup questions are the work. Each one fills a real field in ERPNext.
 1. If what they just said answers any open question, call answer_setup with it, in the same turn, before anything else.
-2. Then ask the next open question, in the words it is written in. One at a time.
+2. Then ask the next open question, in the words it is written in. Exactly one.
+
+Never list questions. Not numbered, not bulleted, not "here are the next few".
+One question, by itself, is the whole of your reply after any answer you saved.
+If they greet you, greet them back in one line and ask that one question.
 3. Save only what they actually said. Never guess, never invent a question or a choice, never answer for them.
 4. When every question in a step is answered, offer to build it, and call build_in_erpnext when they agree. Then say what it made.
 
@@ -46,7 +50,7 @@ If they ask something open — what is next, where are we, what is left — answ
 
 Spreadsheets of their own data are a separate job: step_help says what a step wants, check_step says how it went, fix corrects a row. Only reach for these when they are sending you data, not during setup.
 
-How to speak: short, plain, warm. You are talking to a business owner, not a consultant. No ERPNext jargon, no field names, no tool names, no JSON. One or two sentences, then the next question."""
+How to speak: short, plain, warm. You are talking to a business owner, not a consultant. No ERPNext jargon, no field names, no tool names, no JSON. Two or three sentences at the very most, then the one question. A long reply is a wrong reply."""
 
 
 def _area_arg(description: str) -> dict:
@@ -594,15 +598,18 @@ def standing(onboarding: str) -> str:
 	it the state removes the question.
 	"""
 	try:
-		state = _setup_questions(onboarding, 3)
+		state = _setup_questions(onboarding, 1)
 	except Exception:
 		return ""
 	if not state["left"]:
 		return "Every setup question is answered. What is left is building the steps in ERPNext."
-	nxt = "; ".join(f"{q['key']}: {q['question']}" for q in state["questions"])
+	# One. Handing over three was an invitation to recite all three, and a
+	# customer who says hello gets a wall of questions back.
+	nxt = state["questions"][0]
 	return (
 		f"Where this stands: {state['answered']} of {state['total']} setup questions answered, "
-		f"{state['left']} still open. The next ones are — {nxt}"
+		f"{state['left']} still open. The one to ask next is {nxt['key']}: \"{nxt['question']}\". "
+		"Ask only that one."
 	)
 
 
@@ -843,6 +850,60 @@ def question_labels(answers: dict) -> list[tuple[str, str]]:
 	return out
 
 
+LIST_LINE = re.compile(r"^\s*(?:[-*\u2022]|\d+[.)])\s+", re.MULTILINE)
+
+
+def one_question(onboarding: str, reply: str) -> str:
+	"""Cut a recited list back to one question.
+
+	Telling a model to ask one thing at a time gets you one thing at a time
+	most of the time, and a numbered list of eleven the rest of it — and a
+	customer who typed "hi" should not be handed the whole wizard. So a reply
+	that has turned into a list is trimmed to what it said before the list
+	began, plus the one question that was actually next.
+
+	A reply that is not a list is left exactly as it is.
+	"""
+	text = (reply or "").strip()
+	if len(LIST_LINE.findall(text)) < 2:
+		return reply
+
+	lead = LIST_LINE.split(text)[0].strip()
+	# Keep at most two sentences of the lead-in; the rest was preamble to the
+	# list that is no longer there.
+	lead = " ".join(re.split(r"(?<=[.!?])\s+", lead)[:2]).strip()
+
+	try:
+		open_now = _setup_questions(onboarding, 1)["questions"]
+	except Exception:
+		open_now = []
+	if not open_now:
+		return lead or text
+
+	question = open_now[0]["question"]
+	if question.lower() in lead.lower():
+		return lead
+	return f"{lead}\n\n{question}".strip()
+
+
+# What people say that answers nothing. "Yes" is not here on purpose: it is
+# small talk as a company's name and a real answer to "do you keep stock
+# elsewhere?", so it is turned away where it is a value, not at the door.
+SMALL_TALK = {
+	"hi", "hey", "hello", "yo", "hiya", "ok", "okay", "k", "sure", "right", "fine",
+	"thanks", "thank you", "ta", "cheers", "ok thanks", "okay thanks", "thanks a lot",
+	"hmm", "um", "test", "testing", "what", "huh", "help", "start", "next", "go on",
+	"good morning", "good afternoon", "good evening", "how are you", "whats up",
+}
+NOT_A_NAME = SMALL_TALK | {"yes", "no", "yep", "nope", "yeah", "nah", "true", "false"}
+
+
+def small_talk(said: str) -> bool:
+	"""Whether this was a greeting rather than something to write down."""
+	plain = re.sub(r"[^a-z ]", "", (said or "").lower()).strip()
+	return not plain or plain in SMALL_TALK or len(plain) < 2
+
+
 def catch_up_setup(onboarding: str, said: str, asked: str | None = None) -> dict:
 	"""What the customer just said, mapped onto the open setup questions.
 
@@ -855,7 +916,9 @@ def catch_up_setup(onboarding: str, said: str, asked: str | None = None) -> dict
 	Everything is checked against the real questions and their real choices
 	before it is saved, and anything not plainly stated is dropped.
 	"""
-	if not (said or "").strip():
+	# "Hi" is not the company's name. Reading a greeting for answers is how a
+	# hello ends up written into ERPNext as a legal entity.
+	if small_talk(said):
 		return {}
 	open_now = _setup_questions(onboarding, 40, with_links=True)["questions"]
 	if not open_now:
@@ -919,7 +982,22 @@ def _real_setup_answers(data: dict, open_now: list[dict], known: dict | None = N
 			if found:
 				out[key] = found
 		else:
-			out[key] = value
+			# Free text still has to look like an answer rather than a nod: a
+			# company is not called "hi", and it is not called "yes" either.
+			plain = re.sub(r"[^a-z ]", "", value.lower()).strip()
+			if plain and plain not in NOT_A_NAME and len(plain) > 1:
+				out[key] = value
+
+	# One sentence does not answer two questions with the same words. Told
+	# "the company is Harness Traders Private Limited", a model will happily
+	# offer that as the company's short code as well; the first question it
+	# fits keeps it.
+	seen = {}
+	for key, value in list(out.items()):
+		if value in seen:
+			del out[key]
+		else:
+			seen[value] = key
 	return out
 
 

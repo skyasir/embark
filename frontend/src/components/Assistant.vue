@@ -5,7 +5,10 @@
 		v-if="o?.assistant"
 		class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-outline-gray-2 bg-surface-white"
 	>
-		<div ref="scroller" class="flex min-h-0 flex-1 flex-col justify-end overflow-y-auto px-4 py-4">
+		<div ref="scroller" class="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">
+			<!-- Pushed to the bottom while there is room, scrollable once there
+			     is not. `justify-end` does the first and breaks the second. -->
+			<div class="mt-auto">
 			<div v-if="!messages.length" class="space-y-3">
 				<p class="text-base leading-relaxed text-ink-gray-8">{{ opening.greeting }}</p>
 				<button
@@ -84,8 +87,9 @@
 			</div>
 
 			<div v-if="busy" class="mt-3 flex items-center gap-2 text-base text-ink-gray-5">
-				<LoadingIndicator class="size-4" />
-				Thinking…
+					<LoadingIndicator class="size-4" />
+					Thinking…
+				</div>
 			</div>
 		</div>
 
