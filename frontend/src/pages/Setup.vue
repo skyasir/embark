@@ -292,7 +292,7 @@ import { Badge, Button, FeatherIcon, LoadingIndicator, toast } from "frappe-ui"
 
 import AnswerField from "../components/AnswerField.vue"
 import { api, errorText } from "../data/api"
-import { state } from "../data/store"
+import { showInErpnext, state } from "../data/store"
 
 const board = ref(null)
 const loading = ref(true)
@@ -479,6 +479,9 @@ async function applyTask(task) {
 		board.value = out.board
 		lastRecord.value = out.record
 		lastCheck.value = null
+		// The live pane on Ask opens on whatever was just written, so the
+		// record is waiting there rather than having to be gone and found.
+		if (out.record?.url) showInErpnext(out.record.url)
 		toast.success(`${out.record.doctype} ${out.record.name} is in ERPNext`)
 	} catch (e) {
 		toast.error(errorText(e))

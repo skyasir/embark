@@ -6,7 +6,17 @@ export const state = reactive({
 	overview: null,
 	loading: true,
 	error: null,
+	// Where the live ERPNext pane is looking. `seq` goes up on every nudge,
+	// so asking for the page it is already on still reloads it — which is the
+	// usual case, because a list does not change its address when a row lands
+	// in it.
+	site: { path: "/app", seq: 0 },
 })
+
+/** Point the live pane at something, or just make it look again. */
+export function showInErpnext(path) {
+	state.site = { path: path || state.site.path, seq: state.site.seq + 1 }
+}
 
 const KEY = "embark-onboarding-id"
 
