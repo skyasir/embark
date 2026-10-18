@@ -107,7 +107,9 @@
 
 <script setup>
 import { computed, ref, watch } from "vue"
-import { Autocomplete, Button, FeatherIcon, FormControl, toast } from "frappe-ui"
+import { Autocomplete, Button, FeatherIcon, FormControl } from "frappe-ui"
+
+import { toast } from "../data/toast"
 
 import { api, errorText, uploadFile } from "../data/api"
 import { state } from "../data/store"

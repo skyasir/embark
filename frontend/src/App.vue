@@ -101,13 +101,17 @@
 		</div>
 	</div>
 	<AiSettings v-model="aiOpen" />
-	<Toast />
+	<!-- The provider, not the bare Toast: `toast.error(...)` writes into a
+	     store that only the provider renders, so without this every message
+	     the app tries to show — including every failure — was dropped. -->
+	<Toasts />
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watchEffect } from "vue"
 import { useRoute, useRouter } from "vue-router"
-import { Avatar, Button, Dropdown, FeatherIcon, LoadingIndicator, Toast, Tooltip, call } from "frappe-ui"
+import { Avatar, Button, Dropdown, FeatherIcon, LoadingIndicator, Tooltip, call } from "frappe-ui"
+import Toasts from "./components/Toasts.vue"
 
 import AiSettings from "./components/AiSettings.vue"
 import Callout from "./components/Callout.vue"
@@ -136,6 +140,14 @@ const title = computed(() => {
 const wide = computed(() => ["setup", "home", "ask"].includes(route.name))
 
 const aiOpen = ref(false)
+/** What the page is actually showing, which is what the button must offer.
+    Read from the choice rather than the DOM, so it changes when the choice
+    does — undefined, it offered "switch to dark" while already dark. */
+const isDark = computed(
+	() =>
+		theme.value === "dark" ||
+		(theme.value === "system" && window.matchMedia?.("(prefers-color-scheme: dark)").matches)
+)
 
 const appMenu = computed(() => [
 	...(overview.value?.assistant

@@ -6,3 +6,4 @@ embark.patches.v0_3.lock_studio_to_the_implementer
 embark.patches.v0_3.ask_which_modules
 embark.patches.v0_3.drop_duplicate_contact_columns
 embark.patches.v0_3.retire_units_of_measure
+embark.patches.v0_4.yes_no_answers_from_the_site

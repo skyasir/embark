@@ -329,7 +329,9 @@
 <script setup>
 import { computed, ref, watch } from "vue"
 import { useRouter } from "vue-router"
-import { Button, FeatherIcon, FormControl, LoadingIndicator, toast } from "frappe-ui"
+import { Button, FeatherIcon, FormControl, LoadingIndicator } from "frappe-ui"
+
+import { toast } from "../data/toast"
 
 import Callout from "../components/Callout.vue"
 import IssueGroup from "../components/IssueGroup.vue"

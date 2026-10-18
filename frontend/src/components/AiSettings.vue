@@ -71,7 +71,9 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from "vue"
-import { Button, Dialog, FormControl, LoadingIndicator, toast } from "frappe-ui"
+import { Button, Dialog, FormControl, LoadingIndicator } from "frappe-ui"
+
+import { toast } from "../data/toast"
 
 import { api, errorText } from "../data/api"
 import { loadOverview } from "../data/store"
