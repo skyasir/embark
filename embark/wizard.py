@@ -923,7 +923,7 @@ def adopt(doc) -> dict:
 	for q in frappe.get_all(
 		"Embark Wizard Question",
 		filters={"is_active": 1},
-		fields=["name", "fieldname", "target_doctype"],
+		fields=["name", "fieldname", "target_doctype", "answer_type"],
 	):
 		if q.name in answered or not q.fieldname or not q.target_doctype:
 			continue
@@ -938,6 +938,10 @@ def adopt(doc) -> dict:
 			continue
 		if value in (None, "", 0):
 			continue
+		# A checkbox reads back as 1, and the question offers Yes and No, so
+		# the answer box showed nothing at all for anything adopted this way.
+		if q.answer_type == "Yes / No":
+			value = "Yes" if frappe.utils.cint(value) else "No"
 		taken[q.name] = str(value)
 
 	for question, value in taken.items():
@@ -1364,7 +1368,14 @@ def _records(doc, task: str) -> list[dict]:
 		if not doctype or not frappe.db.exists("DocType", doctype):
 			continue
 		single = bool(q.is_single if q.target_doctype else task_doc.is_single)
-		values = wanted.setdefault((doctype, single), {})
+		# Two questions filling the same field of the same doctype are asking
+		# for two records, not overwriting one: "your other stock location"
+		# and "where rejected goods go" are both a warehouse_name, and only
+		# one warehouse was ever made.
+		key = (doctype, single)
+		while key in wanted and q.fieldname in wanted[key] and not single:
+			key = (*key, q.name)
+		values = wanted.setdefault(key, {})
 		values[q.fieldname] = (
 			1
 			if q.answer_type == "Yes / No" and value.lower() in ("yes", "1", "true")
@@ -1375,11 +1386,47 @@ def _records(doc, task: str) -> list[dict]:
 		return []
 
 	rows = _child_rows(wanted)
-	plans = [_plan(doc, doctype, single, values) for (doctype, single), values in wanted.items() if values]
+	plans = [_plan(doc, key[0], key[1], values) for key, values in wanted.items() if values]
+	_link_siblings(plans)
 	for plan in plans:
 		for field, row in rows.get(plan["doctype"], {}).items():
 			plan["values"][field] = [row]
 	return plans
+
+
+def _link_siblings(plans: list[dict]) -> None:
+	"""Point the records a step makes at each other.
+
+	A bank account belongs to a bank, and a step that asks for both makes
+	both — but the account was planned without knowing the bank's name, so
+	ERPNext refused it. The records are written in order, so by the time the
+	second one lands the first exists.
+	"""
+	named = {}
+	for plan in plans:
+		meta = frappe.get_meta(plan["doctype"])
+		title = meta.autoname.split(":")[1] if (meta.autoname or "").startswith("field:") else None
+		known = plan["name"] or (plan["values"].get(title) if title else None)
+		if known:
+			named[plan["doctype"]] = known
+
+	for plan in plans:
+		meta = frappe.get_meta(plan["doctype"])
+		for field in meta.fields:
+			# Only a link the record cannot do without. A territory has a
+			# manager field and a step that also names a salesperson does not
+			# thereby make them the manager — that is a relationship nobody
+			# stated, and inventing one is worse than leaving it empty.
+			if field.fieldtype != "Link" or not field.reqd or plan["values"].get(field.fieldname):
+				continue
+			if field.options in named and field.options != plan["doctype"]:
+				plan["values"][field.fieldname] = named[field.options]
+
+	# And written in that order, so the record being pointed at exists first.
+	plans.sort(key=lambda plan: any(
+		field.fieldtype == "Link" and field.reqd and field.options in named and field.options != plan["doctype"]
+		for field in frappe.get_meta(plan["doctype"]).fields
+	))
 
 
 def _child_rows(wanted: dict) -> dict:
@@ -1390,10 +1437,10 @@ def _child_rows(wanted: dict) -> dict:
 	record of its own. The questions name the child doctype, and the parent is
 	whichever record in the same step has a table of them.
 	"""
-	parents = [dt for dt, _single in wanted if not frappe.get_meta(dt).istable]
+	parents = [key[0] for key in wanted if not frappe.get_meta(key[0]).istable]
 	out: dict[str, dict] = {}
 	for key in list(wanted):
-		doctype, _single = key
+		doctype = key[0]
 		if not frappe.get_meta(doctype).istable:
 			continue
 		row = wanted.pop(key)
@@ -1412,17 +1459,111 @@ def _plan(doc, doctype: str, single: bool, values: dict) -> dict:
 	if single:
 		return {"doctype": doctype, "name": doctype, "values": values, "exists": True}
 
-	# A record that is already there is updated, not made twice.
 	meta = frappe.get_meta(doctype)
+	company = the_company(doc)
+
+	# A step that sets the company's defaults is editing the company, not
+	# making another one. It never asks for the company's name, so there is
+	# nothing to recognise it by — and a create then fails on the fields it
+	# was never going to ask for, or worse, succeeds and the site has two
+	# companies and two charts of accounts.
+	if doctype == "Company" and company and not values.get("company_name"):
+		return {"doctype": doctype, "name": company, "values": values, "exists": True}
+
+	# Company-scoped records need the company, and nobody should have to type it.
+	if company and meta.get_field("company") and "company" not in values:
+		values["company"] = company
+
+	# What the record must have is worked out first, because some of it is
+	# what identifies the record: a fiscal year is named after its own dates,
+	# and ERPNext already made the one the customer is about to go live in.
+	_fill_required(doctype, meta, values, company)
+
+	# A record that is already there is updated, not made twice.
 	title_field = (
 		meta.get_field(meta.autoname.split(":")[1]) if (meta.autoname or "").startswith("field:") else None
 	)
 	guess = values.get(title_field.fieldname) if title_field else None
 	existing = guess if guess and frappe.db.exists(doctype, guess) else None
 
-	# Company-scoped records need the company, and nobody should have to type it.
-	company = doc.company_name or frappe.db.get_value("Company", {}, "name", order_by="creation asc")
-	if company and meta.get_field("company") and "company" not in values:
-		values["company"] = company
-
 	return {"doctype": doctype, "name": existing, "values": values, "exists": bool(existing)}
+
+
+def the_company(doc) -> str:
+	"""The company this onboarding is for, as ERPNext knows it."""
+	if doc.company_name and frappe.db.exists("Company", doc.company_name):
+		return doc.company_name
+	return frappe.db.get_value("Company", {}, "name", order_by="creation asc") or ""
+
+
+def _fill_required(doctype: str, meta, values: dict, company: str) -> None:
+	"""Fill what a new record must have and nobody should be asked for.
+
+	A customer answering "which day are you closed?" has told us everything
+	about their holidays that matters. ERPNext also wants the list to have a
+	name and a start and end date, which follow from the year, not from them.
+	Without these the step is planned happily and refused on the way in.
+	"""
+	defaults = _REQUIRED_DEFAULTS.get(doctype)
+	if not defaults:
+		return
+	for field, make in defaults.items():
+		if values.get(field) or not meta.get_field(field):
+			continue
+		value = make(values, company)
+		if value:
+			values[field] = value
+
+
+def _year_of(values: dict) -> str:
+	start = values.get("year_start_date") or frappe.utils.nowdate()
+	end = frappe.utils.add_days(frappe.utils.add_years(frappe.utils.getdate(start), 1), -1)
+	return frappe.utils.formatdate(start, "yyyy") + "-" + frappe.utils.formatdate(end, "yyyy")
+
+
+_REQUIRED_DEFAULTS = {
+	"Fiscal Year": {
+		"year": lambda values, company: _year_of(values),
+		"year_end_date": lambda values, company: frappe.utils.add_days(
+			frappe.utils.add_years(frappe.utils.getdate(values.get("year_start_date")), 1), -1
+		)
+		if values.get("year_start_date")
+		else None,
+	},
+	"Holiday List": {
+		"holiday_list_name": lambda values, company: f"{company} Holidays" if company else "Holidays",
+		"from_date": lambda values, company: frappe.utils.get_year_start(frappe.utils.nowdate()),
+		"to_date": lambda values, company: frappe.utils.get_year_ending(frappe.utils.nowdate()),
+	},
+	"Address": {
+		"address_title": lambda values, company: company or "Head Office",
+		"address_type": lambda values, company: "Billing",
+		"country": lambda values, company: frappe.db.get_value("Company", company, "country")
+		if company
+		else None,
+	},
+	"Cost Center": {
+		"parent_cost_center": lambda values, company: frappe.db.get_value(
+			"Cost Center", {"company": company, "is_group": 1}, "name"
+		)
+		if company
+		else None,
+	},
+	"Bank Account": {
+		"account_name": lambda values, company: values.get("bank_account_no") or company or "Current Account",
+		"bank": lambda values, company: frappe.db.get_value("Bank", {}, "name", order_by="creation desc"),
+	},
+	"Price List": {
+		"currency": lambda values, company: frappe.db.get_value("Company", company, "default_currency")
+		if company
+		else None,
+		"selling": lambda values, company: 1,
+	},
+	"Warehouse": {
+		"parent_warehouse": lambda values, company: frappe.db.get_value(
+			"Warehouse", {"company": company, "is_group": 1}, "name"
+		)
+		if company
+		else None,
+	},
+}

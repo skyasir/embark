@@ -71,7 +71,9 @@
 
 <script setup>
 import { computed, ref } from "vue"
-import { Dialog, FormControl, toast } from "frappe-ui"
+import { Dialog, FormControl } from "frappe-ui"
+
+import { toast } from "../data/toast"
 
 import Callout from "./Callout.vue"
 import { api, errorText } from "../data/api"

@@ -43,7 +43,9 @@
 
 <script setup>
 import { computed, ref } from "vue"
-import { Button, FormControl, toast } from "frappe-ui"
+import { Button, FormControl } from "frappe-ui"
+
+import { toast } from "../data/toast"
 
 import { api, errorText } from "../data/api"
 import { setOverview, state } from "../data/store"

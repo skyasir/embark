@@ -53,7 +53,7 @@
 					<div class="min-w-0 flex-1">
 						<div class="truncate text-base font-medium text-ink-gray-9">{{ task.title }}</div>
 						<div class="truncate text-sm text-ink-gray-5">
-							{{ task.record ? `${task.doctype} · ${task.record.name}` : task.doctype }}
+							{{ task.record ? [task.record.doctype || task.doctype, task.record.name].filter(Boolean).join(" · ") : task.doctype }}
 						</div>
 					</div>
 					<span class="shrink-0 text-sm tabular-nums text-ink-gray-5">

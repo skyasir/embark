@@ -90,7 +90,9 @@
 
 <script setup>
 import { computed, reactive, ref } from "vue"
-import { Badge, FeatherIcon, Tooltip, toast } from "frappe-ui"
+import { Badge, FeatherIcon, Tooltip } from "frappe-ui"
+
+import { toast } from "../data/toast"
 
 import { api, errorText } from "../data/api"
 import { setOverview, state } from "../data/store"

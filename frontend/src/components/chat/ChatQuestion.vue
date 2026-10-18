@@ -27,7 +27,9 @@
 
 <script setup>
 import { computed, ref, watch } from "vue"
-import { Button, toast } from "frappe-ui"
+import { Button } from "frappe-ui"
+
+import { toast } from "../../data/toast"
 
 import AnswerField from "../AnswerField.vue"
 import { api, errorText } from "../../data/api"

@@ -69,7 +69,9 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue"
 import { useRouter } from "vue-router"
-import { FormControl, toast } from "frappe-ui"
+import { FormControl } from "frappe-ui"
+
+import { toast } from "../data/toast"
 
 import Callout from "../components/Callout.vue"
 import { api, errorText } from "../data/api"

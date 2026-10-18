@@ -247,13 +247,20 @@
 							</div>
 						</div>
 
-						<div v-if="lastRecord" class="mt-6 overflow-hidden rounded-lg border border-outline-green-2">
+						<!-- One line per record the step wrote: a step can make
+						     several, and naming only the first made the others
+						     look as though they had not happened. -->
+						<div
+							v-for="made in lastRecords"
+							:key="made.doctype + made.name"
+							class="mt-3 overflow-hidden rounded-lg border border-outline-green-2 first:mt-6"
+						>
 							<div class="flex items-center gap-2 border-b border-outline-green-2 bg-surface-green-1 px-3 py-2">
 								<FeatherIcon name="check-circle" class="size-4 shrink-0 text-ink-green-3" />
 								<span class="min-w-0 flex-1 truncate text-sm font-semibold text-ink-green-3">
-									{{ lastRecord.doctype }} {{ lastRecord.name }} is in ERPNext
+									{{ made.doctype }} {{ made.name }} is in ERPNext
 								</span>
-								<a :href="lastRecord.url" target="_blank" rel="noopener">
+								<a :href="made.url" target="_blank" rel="noopener">
 									<Button size="sm" variant="ghost" icon-right="external-link" label="Open" />
 								</a>
 							</div>
@@ -301,7 +308,9 @@
 
 <script setup>
 import { computed, ref, watch } from "vue"
-import { Badge, Button, FeatherIcon, LoadingIndicator, toast } from "frappe-ui"
+import { Badge, Button, FeatherIcon, LoadingIndicator } from "frappe-ui"
+
+import { toast } from "../data/toast"
 
 import AnswerField from "../components/AnswerField.vue"
 import { api, errorText } from "../data/api"
@@ -318,6 +327,7 @@ const draft = ref("")
 const form = ref({})
 const modules = ref("")
 const lastRecord = ref(null)
+const lastRecords = ref([])
 const lastCheck = ref(null)
 
 const isStaff = computed(() => state.overview?.is_staff)
@@ -357,8 +367,15 @@ const currentTask = computed(
 )
 
 /** A step writes something if it, or any of its questions, names a record. */
+/**
+ * A step writes something only when one of its questions fills a field. A
+ * question that merely names a doctype — "do your customers return goods?"
+ * against Sales Invoice — decides something and writes nothing, and offering
+ * to build it produced an error telling you to answer questions you had just
+ * answered.
+ */
 function writes(task) {
-	return Boolean(task?.doctype || (task?.questions || []).some((q) => q.doctype))
+	return (task?.questions || []).some((q) => q.field && (q.doctype || task.doctype))
 }
 
 function canApply(key) {
@@ -491,11 +508,13 @@ async function applyTask(task) {
 		const out = await api("wizard_apply", { onboarding: state.id, task })
 		board.value = out.board
 		lastRecord.value = out.record
+		lastRecords.value = out.records || (out.record ? [out.record] : [])
 		lastCheck.value = null
 		// The live pane on Ask opens on whatever was just written, so the
 		// record is waiting there rather than having to be gone and found.
 		if (out.record?.url) showInErpnext(out.record.url)
-		toast.success(`${out.record.doctype} ${out.record.name} is in ERPNext`)
+		const made = lastRecords.value.map((r) => `${r.doctype} ${r.name}`).join(", ")
+		toast.success(made ? `${made} — now in ERPNext` : "Done")
 	} catch (e) {
 		toast.error(errorText(e))
 	} finally {

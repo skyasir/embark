@@ -785,9 +785,13 @@ def suggestions(doctype: str, limit: int = 100) -> list[str]:
 	_get_onboarding(None)  # a question is only asked inside an onboarding
 	if not frappe.db.exists("DocType", doctype):
 		return []
-	if frappe.db.count(doctype) < WHOLE_LIST_UNDER:
-		return frappe.get_all(doctype, pluck="name", limit=0, order_by="name asc")
-	return frappe.get_all(doctype, pluck="name", limit=limit, order_by="modified desc")
+	# A group is a heading, not a record you can post to or sell from, and
+	# ERPNext refuses one the moment the step is built. Offering them is
+	# offering answers that cannot work.
+	filters = {"is_group": 0} if frappe.get_meta(doctype).get_field("is_group") else {}
+	if frappe.db.count(doctype, filters) < WHOLE_LIST_UNDER:
+		return frappe.get_all(doctype, filters=filters, pluck="name", limit=0, order_by="name asc")
+	return frappe.get_all(doctype, filters=filters, pluck="name", limit=limit, order_by="modified desc")
 
 
 @frappe.whitelist()

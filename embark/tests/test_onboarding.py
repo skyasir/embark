@@ -1633,3 +1633,71 @@ class TestChatDoesTheWork(TestCase):
 			"Embark Wizard Question", "company_logo", ["task", "answer_type", "fieldname", "target_doctype"]
 		)
 		self.assertEqual(logo, ("Create a company", "Image", "company_logo", "Company"))
+
+	def test_a_step_that_sets_company_defaults_edits_the_company(self):
+		"""It never asks for the company's name, so it was planning a second one."""
+		from embark import wizard
+
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		company = wizard.the_company(doc)
+		if not company:
+			self.skipTest("no company on this site yet")
+
+		plan = wizard._plan(doc, "Company", False, {"enable_perpetual_inventory": 1})
+		self.assertTrue(plan["exists"], "a company that exists is updated, not created again")
+		self.assertEqual(plan["name"], company)
+
+		# Asked for a company by name, it still makes one.
+		fresh = wizard._plan(doc, "Company", False, {"company_name": "Somebody Else Ltd", "abbr": "SEL"})
+		self.assertFalse(fresh["exists"])
+
+	def test_a_new_record_is_given_what_erpnext_insists_on(self):
+		"""A customer who said which day they are closed has said enough."""
+		from embark import wizard
+
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		plan = wizard._plan(doc, "Holiday List", False, {"weekly_off": "Sunday"})
+		for needed in ("holiday_list_name", "from_date", "to_date"):
+			self.assertTrue(plan["values"].get(needed), f"{needed} has to be filled in for them")
+
+	def test_two_questions_filling_one_field_make_two_records(self):
+		"""Both warehouse questions write warehouse_name; one overwrote the other."""
+		from embark import wizard
+
+		task = frappe.get_doc(
+			{
+				"doctype": "Embark Wizard Task",
+				"task_name": "Test step: two warehouses",
+				"sequence": 997,
+				"stage": "Setup",
+				"description": "Test step.",
+			}
+		).insert(ignore_permissions=True)
+		for key, label in (("test_wh_one", "Where is your main store?"), ("test_wh_two", "And the other one?")):
+			frappe.get_doc(
+				{
+					"doctype": "Embark Wizard Question",
+					"question_key": key,
+					"task": task.name,
+					"label": label,
+					"target_doctype": "Warehouse",
+					"fieldname": "warehouse_name",
+					"answer_type": "Text",
+					"sequence": 10,
+				}
+			).insert(ignore_permissions=True)
+
+		doc = frappe.get_doc("Embark Onboarding", self.onboarding.name)
+		wizard.save_answers(doc, {"test_wh_one": "Main Store", "test_wh_two": "Rejected Goods"})
+		plans = wizard._records(frappe.get_doc("Embark Onboarding", self.onboarding.name), task.name)
+		made = sorted(p["values"]["warehouse_name"] for p in plans)
+		self.assertEqual(made, ["Main Store", "Rejected Goods"], "both answers have to survive")
+
+	def test_a_group_is_never_offered_as_an_answer(self):
+		"""ERPNext refuses a group account, so offering one offers a dead end."""
+		if not frappe.db.exists("DocType", "Account"):
+			self.skipTest("no accounts on this site")
+		offered = api.suggestions("Account")
+		groups = frappe.get_all("Account", filters={"is_group": 1}, pluck="name")
+		self.assertTrue(groups, "this site has no group accounts to check against")
+		self.assertEqual([a for a in offered if a in set(groups)], [])

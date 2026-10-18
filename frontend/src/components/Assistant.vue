@@ -159,7 +159,9 @@
 
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from "vue"
-import { Badge, Button, FeatherIcon, LoadingIndicator, toast } from "frappe-ui"
+import { Badge, Button, FeatherIcon, LoadingIndicator } from "frappe-ui"
+
+import { toast } from "../data/toast"
 
 import { Renderer } from "@openuidev/vue-lang"
 
