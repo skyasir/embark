@@ -18,8 +18,8 @@
 			</div>
 		</section>
 
-		<section class="flex min-w-0 flex-1 flex-col">
-			<ErpnextFrame :path="state.site.path" :seq="state.site.seq" :height="frameHeight" />
+		<section class="flex min-h-0 min-w-0 flex-1 flex-col">
+			<ErpnextFrame :path="state.site.path" :seq="state.site.seq" />
 		</section>
 	</div>
 
@@ -27,7 +27,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from "vue"
+import { computed, ref } from "vue"
 import { Button } from "frappe-ui"
 
 import AiSettings from "../components/AiSettings.vue"
@@ -37,16 +37,4 @@ import { state } from "../data/store"
 
 const o = computed(() => state.overview)
 const aiOpen = ref(false)
-const frameHeight = ref(600)
-
-/** The frame reaches the bottom of the window, whatever the window is. */
-function fit() {
-	frameHeight.value = Math.max(window.innerHeight - 136, 420)
-}
-
-onMounted(() => {
-	fit()
-	window.addEventListener("resize", fit)
-})
-onBeforeUnmount(() => window.removeEventListener("resize", fit))
 </script>
