@@ -56,6 +56,37 @@
 		</button>
 	</div>
 
+	<!-- A picture, not a sentence. It is uploaded against this onboarding, so
+	     it is private until the record that uses it is written. -->
+	<div v-else-if="question.type === 'Image'" class="flex items-center gap-3">
+		<img
+			v-if="modelValue"
+			:src="modelValue"
+			alt=""
+			class="size-14 shrink-0 rounded-lg border border-outline-gray-2 bg-surface-white object-contain p-1"
+		/>
+		<div
+			v-else
+			class="flex size-14 shrink-0 items-center justify-center rounded-lg border border-dashed border-outline-gray-3 text-ink-gray-4"
+		>
+			<FeatherIcon name="image" class="size-5" />
+		</div>
+
+		<div class="flex items-center gap-2">
+			<Button size="sm" variant="subtle" :loading="uploading" @click="picker?.click()">
+				{{ modelValue ? "Change" : "Choose a file" }}
+			</Button>
+			<Button
+				v-if="modelValue"
+				size="sm"
+				variant="ghost"
+				label="Remove"
+				@click="emit('update:modelValue', '')"
+			/>
+			<input ref="picker" type="file" accept="image/*" class="hidden" @change="onPick" />
+		</div>
+	</div>
+
 	<Autocomplete
 		v-else-if="question.type === 'Link'"
 		:options="links"
@@ -76,9 +107,10 @@
 
 <script setup>
 import { computed, ref, watch } from "vue"
-import { Autocomplete, FeatherIcon, FormControl } from "frappe-ui"
+import { Autocomplete, Button, FeatherIcon, FormControl, toast } from "frappe-ui"
 
-import { api } from "../data/api"
+import { api, errorText, uploadFile } from "../data/api"
+import { state } from "../data/store"
 
 const props = defineProps({
 	question: { type: Object, required: true },
@@ -89,6 +121,23 @@ const props = defineProps({
 const emit = defineEmits(["update:modelValue", "enter"])
 
 const links = ref([])
+const picker = ref(null)
+const uploading = ref(false)
+
+async function onPick(event) {
+	const file = event.target.files?.[0]
+	if (!file) return
+	uploading.value = true
+	try {
+		const uploaded = await uploadFile(file, state.id)
+		emit("update:modelValue", uploaded.file_url)
+	} catch (e) {
+		toast.error(errorText(e))
+	} finally {
+		uploading.value = false
+		if (picker.value) picker.value.value = ""
+	}
+}
 const picked = computed(() =>
 	(props.modelValue || "")
 		.split(",")

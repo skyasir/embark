@@ -43,6 +43,20 @@
 	},
 	{
 		"module": "Company Setup",
+		"task": "Create a company",
+		"question_key": "company_logo",
+		"label": "What is your company's logo?",
+		"description": "This appears on quotations, invoices and every other document ERPNext prints for you, and at the top of the screen for your staff. A wide image on a plain background prints best. Without one, your documents go out with your company's name set in plain type.",
+		"fieldname": "company_logo",
+		"target_doctype": "Company",
+		"answer_type": "Image",
+		"options": "",
+		"example": "",
+		"is_required": 0,
+		"sequence": 35
+	},
+	{
+		"module": "Company Setup",
 		"task": "Add your company address",
 		"question_key": "address_line1",
 		"label": "What is the first line of your registered address?",
