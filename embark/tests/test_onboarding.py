@@ -1535,3 +1535,32 @@ class TestChatDoesTheWork(TestCase):
 		self.assertEqual(kept.get("company_name"), "Chat Traders Private Limited")
 		self.assertIn("answer_setup", [s["tool"] for s in out["steps"]], "it has to say that it saved")
 		self.assertIn("put you down", out["reply"], "a saved guess must be visible to be correctable")
+
+	def test_a_greeting_is_never_written_down_as_an_answer(self):
+		"""Saying hello got saved as the company's legal name."""
+		open_now = assistant._setup_questions(self.onboarding.name, 200, with_links=True)["questions"]
+		for greeting in ("hi", "Hi!", "ok", "thanks", "yes"):
+			kept = assistant._real_setup_answers({"company_name": greeting}, open_now)
+			self.assertEqual(kept, {}, f"{greeting!r} is not a company")
+
+		# The catch-up does not even look at a greeting.
+		self.assertEqual(assistant.catch_up_setup(self.onboarding.name, "hi"), {})
+		# But a real answer still goes through, including a bare yes.
+		self.assertTrue(assistant.small_talk("hello") and not assistant.small_talk("yes"))
+
+	def test_a_recited_list_is_cut_back_to_one_question(self):
+		"""Saying hi should not return the whole wizard."""
+		wall = (
+			"Sure! Here are the questions:\n\n"
+			"1. What is your company's full legal name?\n"
+			"2. Which country is it registered in?\n"
+			"3. What is the PAN?\n"
+		)
+		trimmed = assistant.one_question(self.onboarding.name, wall)
+		self.assertNotIn("2.", trimmed)
+		self.assertNotIn("3.", trimmed)
+		self.assertLess(len(trimmed), len(wall))
+
+		# A reply that is not a list is left exactly as it was.
+		plain = "Right — what is the company's full legal name?"
+		self.assertEqual(assistant.one_question(self.onboarding.name, plain), plain)

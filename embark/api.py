@@ -196,6 +196,8 @@ def ask(
 		ui_prompt=ui_prompt,
 	)
 	_catch_up_setup(doc, message, out)
+	# One question at a time, whatever the model decided to write.
+	out["reply"] = assistant.one_question(doc.name, out.get("reply") or "")
 	# The drawing is streamed separately, so the words arrive without waiting
 	# for it. `ui_prompt` here only tells the conversation what it may draw.
 	return out
