@@ -5,7 +5,7 @@
 		v-if="o?.assistant"
 		class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-outline-gray-2 bg-surface-white"
 	>
-		<div ref="scroller" class="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+		<div ref="scroller" class="flex min-h-0 flex-1 flex-col justify-end overflow-y-auto px-4 py-4">
 			<div v-if="!messages.length" class="space-y-3">
 				<p class="text-base leading-relaxed text-ink-gray-8">{{ opening.greeting }}</p>
 				<button
@@ -18,7 +18,7 @@
 				</button>
 			</div>
 
-			<div v-for="(m, i) in messages" :key="i" class="text-base leading-relaxed">
+			<div v-for="(m, i) in messages" :key="i" class="mt-3 text-base leading-relaxed first:mt-0">
 				<div v-if="m.role === 'user'" class="ml-8 rounded-lg bg-surface-gray-2 px-3 py-2 text-ink-gray-8">
 					{{ m.content }}
 				</div>
@@ -83,7 +83,7 @@
 				<div v-else class="mr-4 whitespace-pre-line text-ink-gray-8">{{ m.content }}</div>
 			</div>
 
-			<div v-if="busy" class="flex items-center gap-2 text-base text-ink-gray-5">
+			<div v-if="busy" class="mt-3 flex items-center gap-2 text-base text-ink-gray-5">
 				<LoadingIndicator class="size-4" />
 				Thinking…
 			</div>
@@ -161,7 +161,7 @@ import { Renderer } from "@openuidev/vue-lang"
 
 import { api, callMethod, errorText, stream, uploadFile } from "../data/api"
 import { library, uiPrompt } from "../data/chatui"
-import { setOverview, state } from "../data/store"
+import { setOverview, showInErpnext, state } from "../data/store"
 
 const o = computed(() => state.overview)
 const draft = ref("")
@@ -218,6 +218,8 @@ async function send(text) {
 			await drawIt(shown)
 		}
 		if (result.change_set) messages.value.push({ role: "change", set: result.change_set, busy: false, loading: false, preview: null })
+		// Whatever the turn touched, show it on the site beside the chat.
+		follow(result)
 		// Answers it saved change the checklist behind the panel.
 		if (result.overview) setOverview(result.overview)
 	} catch (e) {
@@ -234,6 +236,30 @@ async function send(text) {
  * rows or change cards drawn beside it. Those carry no `content`, and a
  * provider rejects the whole request over one message it cannot read.
  */
+/**
+ * Point the live ERPNext pane at whatever this turn did.
+ *
+ * A turn that wrote a record opens that record; a turn that only changed
+ * something the pane may already be showing just makes it look again. A turn
+ * that did nothing leaves it alone, so the customer does not lose their place
+ * while they are reading.
+ */
+function follow(result) {
+	const change = (result.change_set?.changes || [])[0]
+	if (change?.ref_doctype && change?.ref_name) {
+		const doctype = change.ref_doctype.toLowerCase().replace(/ /g, "-")
+		showInErpnext(`/app/${doctype}/${encodeURIComponent(change.ref_name)}`)
+		return
+	}
+	// A tool that wrote something says so in its steps; the pane re-reads.
+	if ((result.steps || []).some((step) => !step.failed && WRITES.test(step.tool || ""))) {
+		showInErpnext()
+	}
+}
+
+// The tools that change the site rather than only look at it.
+const WRITES = /create_in_erpnext|save_answers|fix|type_rows|configure/
+
 /**
  * Draw the answer that was just given, as it is written. Nothing here can
  * fail loudly: a drawing that does not arrive leaves the words, which are

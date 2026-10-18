@@ -42,6 +42,8 @@ const props = defineProps({
 	// remote to reach for and nothing to sign in to twice.
 	path: { type: String, default: "/app" },
 	height: { type: Number, default: 520 },
+	// Bumped when the page should be read again, address unchanged.
+	seq: { type: Number, default: 0 },
 })
 
 const key = ref(0)
@@ -52,4 +54,11 @@ function reload() {
 
 // Pointed somewhere new, it loads that rather than keeping the old page.
 watch(() => props.path, reload)
+
+// Nudged, it looks again even at the same address: a record that has just
+// been written into a list does not change the list's address.
+watch(
+	() => props.seq,
+	(now, before) => now !== before && reload()
+)
 </script>

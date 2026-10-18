@@ -1,16 +1,9 @@
 <template>
-	<!-- The chat is a column; ERPNext is a whole application. So the chat takes
-	     a column's worth and the site takes the rest, which is the only width
-	     the desk is actually readable in. -->
-	<div class="flex h-full min-h-0 gap-6">
-		<section class="flex w-[400px] shrink-0 flex-col">
-			<div class="mb-3 shrink-0">
-				<h1 class="text-xl font-semibold text-ink-gray-9">Ask Embark</h1>
-				<p class="text-sm text-ink-gray-5">
-					Say what you need and watch it appear on the site beside you.
-				</p>
-			</div>
-
+	<!-- Two panes: what you say on the left, the site it happens on, in full,
+	     on the right. Nothing above either of them — the page title is already
+	     in the header, and a second one only pushed ERPNext down. -->
+	<div class="flex h-full min-h-0 gap-4">
+		<section class="flex w-[380px] shrink-0 flex-col xl:w-[420px]">
 			<Assistant v-if="o?.assistant" />
 			<div v-else class="rounded-lg border border-outline-gray-2 px-4 py-5">
 				<p class="text-base text-ink-gray-7">
@@ -26,11 +19,7 @@
 		</section>
 
 		<section class="flex min-w-0 flex-1 flex-col">
-			<div class="mb-3 shrink-0">
-				<h2 class="text-base font-semibold text-ink-gray-8">ERPNext</h2>
-				<p class="text-sm text-ink-gray-5">This site, live. Anything Embark writes shows up here.</p>
-			</div>
-			<ErpnextFrame path="/app" :height="frameHeight" />
+			<ErpnextFrame :path="state.site.path" :seq="state.site.seq" :height="frameHeight" />
 		</section>
 	</div>
 
@@ -50,9 +39,9 @@ const o = computed(() => state.overview)
 const aiOpen = ref(false)
 const frameHeight = ref(600)
 
-/** The frame should reach the bottom of the window, whatever the window is. */
+/** The frame reaches the bottom of the window, whatever the window is. */
 function fit() {
-	frameHeight.value = Math.max(window.innerHeight - 200, 420)
+	frameHeight.value = Math.max(window.innerHeight - 136, 420)
 }
 
 onMounted(() => {

@@ -1386,3 +1386,33 @@ class TestSetupWizard(TestCase):
 		self.assertIsNone(self.task(self.board(), "Set payroll rules"))
 		# The HR step that needs nothing but ERPNext is still asked.
 		self.assertIsNotNone(self.task(self.board(), "Set up your organisation"))
+
+	def test_the_wizard_may_write_what_it_asks_about(self):
+		"""A step that asks about a Company has to be able to write one.
+
+		The change set guards what Embark may touch, and it knew about the
+		settings a plan configures but not the records the wizard creates — so
+		"Create in ERPNext" failed on the very first step with "Embark does not
+		change Company".
+		"""
+		from embark.embark.doctype.embark_change_set.embark_change_set import allowed_doctypes
+
+		allowed = allowed_doctypes()
+		asked = {
+			q.target_doctype
+			for q in frappe.get_all(
+				"Embark Wizard Question",
+				filters={"is_active": 1, "target_doctype": ("is", "set")},
+				fields=["target_doctype"],
+			)
+		}
+		self.assertTrue(asked, "the wizard asks about nothing at all")
+		self.assertEqual(asked - allowed, set(), "the wizard asks about records it may not write")
+
+	def test_embark_still_refuses_what_is_not_its_business(self):
+		"""Widening the guard must not open the door to everything."""
+		from embark.embark.doctype.embark_change_set.embark_change_set import allowed_doctypes
+
+		allowed = allowed_doctypes()
+		for doctype in ("Sales Invoice", "Stock Entry", "Payment Entry", "User", "Journal Entry"):
+			self.assertNotIn(doctype, allowed, doctype)

@@ -8,7 +8,7 @@ before.
 
 Two rules keep it honest:
 
-* Only the doctypes in ``ALLOWED`` can be touched: the customisation layer —
+* Only the doctypes in ``allowed_doctypes()`` can be touched: the list below —
   fields, properties, scripts, reports, workflows — and the settings that decide
   how ERPNext behaves, which is what Embark configures from the plan. Never a
   customer's invoices, stock or ledgers.
@@ -66,10 +66,38 @@ ALLOWED = (
 SNAPSHOT_SKIP = ("name", "doctype", "creation", "owner", "modified", "modified_by", "idx")
 
 
+def allowed_doctypes() -> set[str]:
+	"""What Embark may write: the list above, plus whatever the wizard asks for.
+
+	The setup wizard's questions each name the record they fill — a Company, a
+	Warehouse, a Payment Term — and those are the records a standard
+	implementation is made of. Keeping a second copy of that list here would
+	mean a question added to the bank could not be applied until somebody
+	remembered to come back and allow it, which is exactly the kind of gap
+	nobody finds until a customer presses the button.
+
+	It stays bounded: the bank is a file in this app, every doctype in it is a
+	master or a settings record, and nothing a question does not name can be
+	touched.
+	"""
+	asked = frappe.get_all(
+		"Embark Wizard Question",
+		filters={"is_active": 1, "target_doctype": ("is", "set")},
+		pluck="target_doctype",
+	)
+	tasks = frappe.get_all(
+		"Embark Wizard Task",
+		filters={"is_active": 1, "target_doctype": ("is", "set")},
+		pluck="target_doctype",
+	)
+	return set(ALLOWED) | set(asked) | set(tasks)
+
+
 class EmbarkChangeSet(Document):
 	def validate(self):
+		allowed = allowed_doctypes()
 		for row in self.changes:
-			if row.ref_doctype not in ALLOWED:
+			if row.ref_doctype not in allowed:
 				frappe.throw(
 					_("Embark does not change {0}. It only changes how the site is set up.").format(
 						frappe.bold(row.ref_doctype)
