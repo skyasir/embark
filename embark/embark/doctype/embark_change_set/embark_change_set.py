@@ -80,9 +80,12 @@ def allowed_doctypes() -> set[str]:
 	master or a settings record, and nothing a question does not name can be
 	touched.
 	"""
+	# Only a question that fills a field writes anything. A question like "do
+	# your customers return goods?" names Sales Invoice to say what it is
+	# about, and must not thereby hand Embark the right to write invoices.
 	asked = frappe.get_all(
 		"Embark Wizard Question",
-		filters={"is_active": 1, "target_doctype": ("is", "set")},
+		filters={"is_active": 1, "target_doctype": ("is", "set"), "fieldname": ("is", "set")},
 		pluck="target_doctype",
 	)
 	tasks = frappe.get_all(
