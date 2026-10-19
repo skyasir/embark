@@ -129,3 +129,51 @@ def step(title, onboarding="ONB-2026-0003"):
 	print(f"STEP {title}: {task['answered']}/{task['total']} state={task['state']} doctype={task['doctype']}")
 	for q in task["questions"]:
 		print(f"   {q['key']}: field={q['field'] or 'NONE'} doctype={q['doctype']} answer={q['answer']!r}")
+
+
+def audit():
+	"""Which questions configure something, which decide something, which do neither."""
+	import re
+
+	rows = frappe.get_all(
+		"Embark Wizard Question",
+		filters={"is_active": 1},
+		fields=["name", "task", "label", "fieldname", "applies_when"],
+	)
+	conditions = " ".join(r.applies_when or "" for r in rows)
+	order = {
+		t.name: t.sequence
+		for t in frappe.get_all(
+			"Embark Wizard Task", filters={"is_active": 1}, fields=["name", "sequence"]
+		)
+	}
+
+	writes, gates, idle = [], [], []
+	for r in rows:
+		if r.fieldname:
+			writes.append(r)
+		elif re.search(r"\b%s\b" % re.escape(r.name), conditions):
+			gates.append(r)
+		else:
+			idle.append(r)
+
+	print(f"AUDIT configures={len(writes)} decides={len(gates)} neither={len(idle)}")
+	by_task = {}
+	for r in idle:
+		by_task.setdefault(r.task, []).append(f"{r.name} — {r.label[:58]}")
+	for task in sorted(by_task, key=lambda t: order.get(t, 999)):
+		print(f"IDLE {task}")
+		for line in by_task[task]:
+			print(f"      {line}")
+
+
+def shape():
+	"""What the wizard is made of now."""
+	q = frappe.db.count("Embark Wizard Question", {"is_active": 1})
+	tasks = frappe.get_all(
+		"Embark Wizard Task", filters={"is_active": 1}, fields=["name", "kind"], order_by="sequence"
+	)
+	asked = [t.name for t in tasks if t.kind != "Work"]
+	work = [t.name for t in tasks if t.kind == "Work"]
+	print(f"SHAPE {q} questions across {len(asked)} question steps, and {len(work)} work steps")
+	print("WORK " + " | ".join(work))

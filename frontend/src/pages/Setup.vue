@@ -141,7 +141,7 @@
 						<div v-for="task in stageTasks('Setup')" :key="task.task">
 							<button
 								class="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-surface-gray-2"
-								@click="toggle(task.task)"
+								@click="task.kind === 'Work' ? (openWork = task) : toggle(task.task)"
 							>
 								<FeatherIcon
 									:name="open === task.task ? 'chevron-down' : 'chevron-right'"
@@ -153,8 +153,15 @@
 								>
 									{{ task.title }}
 								</span>
+								<Badge
+									v-if="task.kind === 'Work'"
+									theme="orange"
+									size="sm"
+									label="Work"
+									class="shrink-0"
+								/>
 								<FeatherIcon
-									v-if="task.answered === task.total"
+									v-else-if="task.answered === task.total"
 									name="check-circle"
 									class="size-4 shrink-0 text-ink-green-3"
 								/>
@@ -185,7 +192,38 @@
 				</div>
 			</aside>
 
-			<section v-if="current" class="mx-auto flex min-h-0 w-full min-w-0 max-w-4xl flex-1 flex-col">
+			<!-- Work is not answered. It says what has to happen and who
+			     prepares what, and nobody is asked to type anything. -->
+			<section
+				v-if="openWork"
+				class="mx-auto flex min-h-0 w-full min-w-0 max-w-4xl flex-1 flex-col"
+			>
+				<div
+					class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-outline-gray-2 bg-surface-white"
+				>
+					<div class="min-h-0 flex-1 overflow-y-auto p-6">
+						<Badge theme="orange" size="md" label="Work, not a question" />
+						<h2 class="mt-3 text-2xl font-semibold leading-snug text-ink-gray-9">
+							{{ openWork.title }}
+						</h2>
+						<p class="mt-2 text-base leading-relaxed text-ink-gray-6">{{ openWork.description }}</p>
+						<div class="mt-5 rounded-lg border border-outline-gray-2 bg-surface-gray-1 px-4 py-3">
+							<p class="text-sm font-medium text-ink-gray-5">What this involves</p>
+							<p class="mt-1 whitespace-pre-line text-base leading-relaxed text-ink-gray-8">
+								{{ openWork.work_note }}
+							</p>
+						</div>
+					</div>
+					<div class="flex shrink-0 items-center justify-between border-t border-outline-gray-2 px-6 py-3">
+						<p class="text-sm text-ink-gray-5">Nothing to answer here.</p>
+						<Button size="sm" variant="subtle" icon-right="chevron-right" @click="openWork = null">
+							Back to the questions
+						</Button>
+					</div>
+				</div>
+			</section>
+
+			<section v-else-if="current" class="mx-auto flex min-h-0 w-full min-w-0 max-w-4xl flex-1 flex-col">
 				<div
 					class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-outline-gray-2 bg-surface-white"
 				>
@@ -322,6 +360,8 @@ const saving = ref(false)
 const applying = ref(false)
 const stage = ref("Company")
 const open = ref("")
+/** A work step being read. It has no questions, so it is not `current`. */
+const openWork = ref(null)
 const at = ref(0)
 const draft = ref("")
 const form = ref({})
@@ -416,6 +456,7 @@ function toggle(task) {
 }
 
 function goTo(key) {
+	openWork.value = null
 	const i = flat.value.findIndex((q) => q.key === key)
 	if (i >= 0) at.value = i
 }
