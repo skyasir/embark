@@ -635,6 +635,203 @@ GATED_BY = {
 	"terms_text": "",
 }
 
+# Work, not questions.
+#
+# A question is something only this business can answer, and answering it
+# configures ERPNext — a field is set or a record is made. Everything else
+# that has to happen is work: somebody collects a trial balance, somebody
+# sets up the approval rules, somebody trains the people who will use it.
+#
+# Dressing work up as a question produces the worst of both. "Do your closing
+# balances need to be brought in?" has one answer for every business moving
+# off an old system, teaches nobody anything, configures nothing, and leaves
+# the actual job — getting the balances in — unlisted and undone.
+#
+# So work is a step of its own: it says what has to happen and who prepares
+# what, and it is ticked off rather than answered.
+WORK = (
+	{
+		"task_name": "Switch on batch and serial tracking",
+		"applies_when": "needs_batch_tracking == yes or needs_serial_tracking == yes",
+		"icon": "hash",
+		"description": "Turning tracking on for the items that need it, and no others.",
+		"work_note": (
+			"We switch tracking on in Stock Settings and set it per item — only the ones you traced "
+			"before. It cannot be turned off for an item once it has stock, so we go through your "
+			"list with you rather than guessing, and agree how the numbers are formed."
+		),
+	},
+	{
+		"task_name": "Set up your prices and discounts",
+		"applies_when": "customer_specific_prices == yes or volume_discounts == yes",
+		"icon": "tag",
+		"description": "The rates and slabs that fill themselves in, instead of being remembered.",
+		"work_note": (
+			"Send us the rates you have agreed with particular customers, and any slab pricing. We "
+			"build them as rules, then raise one order per rule with you watching, so you can see "
+			"the right rate appear before anyone relies on it."
+		),
+	},
+	{
+		"task_name": "Set up tax deducted at source",
+		"applies_when": "deducts_tds == yes",
+		"icon": "percent",
+		"description": "The categories, rates and thresholds for the tax you deduct when paying.",
+		"work_note": (
+			"We set up a category per section you deduct under, with its rate and threshold, and "
+			"attach them to the suppliers they apply to. Give us the sections you use and the rates "
+			"your auditor expects. Short deductions are interest and a mismatched return."
+		),
+	},
+	{
+		"task_name": "Set up trading in other currencies",
+		"applies_when": "trades_in_foreign_currency == yes",
+		"icon": "globe",
+		"description": "Exchange rates, and where the gain or loss on them is posted.",
+		"work_note": (
+			"We switch on the currencies you trade in, decide whether rates come in automatically or "
+			"are entered by hand, and set the account that exchange differences post to. Without "
+			"that account, the difference sits unexplained in your books."
+		),
+	},
+	{
+		"task_name": "Set up subcontracting",
+		"applies_when": "does_subcontracting == yes",
+		"icon": "truck",
+		"description": "Material sent out to a job worker, and goods coming back.",
+		"work_note": (
+			"We set up the flow that keeps material at your job workers visible as your stock, with "
+			"the warehouse that represents each one. Tell us who you send to and what they do. "
+			"Without it, material at the job worker disappears from your records."
+		),
+	},
+	{
+		"task_name": "Set up enquiry and quotation tracking",
+		"applies_when": "tracks_leads == yes",
+		"icon": "phone",
+		"description": "Where enquiries come from, and how they become quotations and orders.",
+		"work_note": (
+			"Leads and opportunities live in Frappe CRM in this version, so we install and connect "
+			"it, bring your sources across, and agree the stages your pipeline uses. Then we walk "
+			"one enquiry through to an order with your sales people watching."
+		),
+	},
+	{
+		"task_name": "Plan your stock counts",
+		"applies_when": "does_stock_takes == Yearly,Quarterly,Monthly,Weekly",
+		"icon": "clipboard",
+		"description": "How a physical count becomes a correction in the books.",
+		"work_note": (
+			"We agree who counts, on what day, and who signs off a difference, then run one count "
+			"with you so the first real one is not also the first attempt. Counts that are never "
+			"reconciled leave your stock figure as good as the entries behind it, and no better."
+		),
+	},
+	{
+		"task_name": "Set up barcode scanning",
+		"applies_when": "uses_barcodes == yes",
+		"icon": "maximize",
+		"description": "Items carrying their barcode, so receiving and dispatch is scanned.",
+		"work_note": (
+			"Every item needs its barcode recorded before this is worth anything, so we agree who "
+			"collects them and by when, then test a receipt and a dispatch with your own scanner."
+		),
+	},
+	{
+		"task_name": "Set up the quote-to-order flow",
+		"applies_when": "takes_supplier_quotes == yes",
+		"icon": "file-text",
+		"description": "Asking several suppliers, comparing what comes back, ordering from it.",
+		"work_note": (
+			"We set up the request that goes out to your suppliers and the comparison that brings "
+			"their quotes together, then run one real purchase through it end to end. Tell us which "
+			"suppliers you normally ask."
+		),
+	},
+	{
+		"task_name": "Set up returns and credit notes",
+		"applies_when": "handles_returns == yes",
+		"icon": "corner-up-left",
+		"description": "Goods coming back, and the credit that goes with them.",
+		"work_note": (
+			"We agree what happens when goods come back — whether they go into saleable stock or a "
+			"rejected store, and who authorises the credit — and run one return through so your "
+			"sales figures and your stock both end up right."
+		),
+	},
+	{
+		"task_name": "Set up job cards on the floor",
+		"applies_when": "uses_job_cards == yes",
+		"icon": "tool",
+		"description": "Operators starting and finishing their stages as the work happens.",
+		"work_note": (
+			"We set up the cards for your operations and decide where the floor sees them — a shared "
+			"screen or a tablet at the machine. Then we run one job through with a supervisor, "
+			"because this is the part that only works if the floor is willing."
+		),
+	},
+	{
+		"task_name": "Add your other weekly offs",
+		"applies_when": "has_second_weekly_off == Yes",
+		"icon": "calendar",
+		"description": "The alternate Saturdays and other days your weekly off does not cover.",
+		"work_note": (
+			"Tell us which Saturdays you close — second and fourth is the usual — and we add them to "
+			"the holiday list for the year. Left out, they count as absences in attendance and come "
+			"off people's pay."
+		),
+	},
+	{
+		"task_name": "Bring in your opening balances",
+		"applies_when": "modules == accounts",
+		"icon": "download",
+		"description": "What you owe, what you are owed, your bank and your stock, as at the day before you start.",
+		"work_note": (
+			"Your accountant gives us a trial balance as at the day before go-live, a list of the "
+			"invoices your customers have not paid, and a list of the bills you have not paid — each "
+			"with its own date, so the ageing is right from the first day. Stock comes in as a count "
+			"with its value. We post it; you check the trial balance matches your old system to the "
+			"rupee before anything else is entered."
+		),
+	},
+	{
+		"task_name": "Set up who approves what",
+		"applies_when": "modules == accounts,selling,buying",
+		"icon": "shield",
+		"description": "The limits above which a discount, an order or a payment waits for somebody.",
+		"work_note": (
+			"Tell us the figures — the discount percentage above which a sale needs releasing, the "
+			"order value above which a purchase does — and who releases them. We set the rules up "
+			"and test them with one of your own orders, so the first time somebody hits the limit is "
+			"not the day you go live."
+		),
+	},
+	{
+		"task_name": "Set up your people and what they can see",
+		"applies_when": "",
+		"icon": "users",
+		"description": "The accounts your staff log in with, and what each of them is allowed to reach.",
+		"work_note": (
+			"We create a login for each person, give them the roles their job needs and no more, and "
+			"where you work across sites, restrict each person to their own branch, warehouse or "
+			"territory. Send us the list of names, emails and what each one does."
+		),
+	},
+	{
+		"task_name": "Plan the switch over",
+		"applies_when": "",
+		"icon": "flag",
+		"description": "The day you start, who is trained first, and how long the old system runs alongside.",
+		"work_note": (
+			"We agree the date you stop entering in the old system, train the two or three people who "
+			"will answer everyone else's questions in week one, and decide whether both systems run "
+			"together for a month. Nothing here is a setting; it is the part that decides whether "
+			"go-live is calm."
+		),
+	},
+)
+
+
 # The order an implementation actually happens in, which is not the order the
 # question bank happens to be written in. Who the company is, then where it
 # is, then when its books start — and only then the accounts those books post
@@ -650,7 +847,6 @@ STEP_ORDER = (
 	"Set your go-live dates",
 	"Set up your printed documents",
 	# Its books
-	"Bring in your opening balances",
 	"Set company default accounts",
 	"Keep the books straight",
 	"Set up taxes",
@@ -658,7 +854,7 @@ STEP_ORDER = (
 	"Set up your bank account",
 	"Set up credit terms",
 	"Set accounting rules",
-	"Decide who approves what",
+	"Set up who approves what",
 	# How it runs
 	"Set up holidays",
 	"Set up warehouses",
@@ -682,8 +878,21 @@ STEP_ORDER = (
 	"Decide how attendance and leave work",
 	"Set payroll rules",
 	"Set up fixed assets",
-	# The switch itself, once everything it needs is known.
-	"Decide who uses ERPNext",
+	# The work, once the questions that shape it are answered.
+	"Switch on batch and serial tracking",
+	"Set up your prices and discounts",
+	"Set up tax deducted at source",
+	"Set up trading in other currencies",
+	"Set up subcontracting",
+	"Set up enquiry and quotation tracking",
+	"Plan your stock counts",
+	"Set up barcode scanning",
+	"Set up the quote-to-order flow",
+	"Set up returns and credit notes",
+	"Set up job cards on the floor",
+	"Add your other weekly offs",
+	"Bring in your opening balances",
+	"Set up your people and what they can see",
 	"Plan the switch over",
 )
 
@@ -693,6 +902,10 @@ STEP_ORDER = (
 # format set from the country it was made in. Asking for them again is asking
 # somebody to do the computer's work and then checking their answer with it.
 ALREADY_DECIDED = (
+	# Replaced by the work steps of the same name, which say what has to
+	# happen instead of asking whether it does.
+	"Decide who approves what",
+	"Decide who uses ERPNext",
 	"Create a unit of measure",
 	"Set the system timezone",
 	"Set date and number format",
@@ -824,6 +1037,15 @@ def seed():
 	_seed("Embark Wizard Task", "task_name", TASKS)
 	_seed("Embark Wizard Question", "question_key", QUESTIONS)
 
+	for work in WORK:
+		if frappe.db.exists("Embark Wizard Task", work["task_name"]):
+			doc = frappe.get_doc("Embark Wizard Task", work["task_name"])
+		else:
+			doc = frappe.get_doc({"doctype": "Embark Wizard Task", **work})
+		existed = bool(doc.get("__islocal") is None and doc.name and frappe.db.exists("Embark Wizard Task", doc.name))
+		doc.update({**work, "kind": "Work", "stage": "Setup", "is_active": 1})
+		doc.save(ignore_permissions=True) if existed else doc.insert(ignore_permissions=True)
+
 	bank_tasks, bank_questions = authored()
 	_seed("Embark Wizard Task", "task_name", bank_tasks, wording=True)
 	_seed("Embark Wizard Question", "question_key", bank_questions, wording=True)
@@ -835,6 +1057,18 @@ def seed():
 	for n, task in enumerate(STEP_ORDER, start=1):
 		if frappe.db.exists("Embark Wizard Task", task):
 			frappe.db.set_value("Embark Wizard Task", task, "sequence", n * 10, update_modified=False)
+
+	# A question the bank no longer carries stops being asked. Without this,
+	# taking one out of the file leaves it on every site that already has it,
+	# which is how four questions about work nobody could act on survived
+	# being deleted.
+	from_app = {q["question_key"] for q in QUESTIONS}
+	from_bank = {q["question_key"] for q in bank_questions}
+	for stale in frappe.get_all(
+		"Embark Wizard Question", filters={"is_active": 1}, pluck="name"
+	):
+		if stale not in from_app and stale not in from_bank:
+			frappe.db.set_value("Embark Wizard Question", stale, "is_active", 0, update_modified=False)
 
 	# A step the bank now covers in its own words is switched off, not deleted,
 	# along with any question still sitting on it. A question the bank took
@@ -970,6 +1204,8 @@ def board(doc) -> dict:
 			"task_name",
 			"sequence",
 			"stage",
+			"kind",
+			"work_note",
 			"icon",
 			"target_doctype",
 			"is_single",
@@ -1022,7 +1258,8 @@ def board(doc) -> dict:
 				}
 			)
 
-		if not questions:
+		# A work step has nothing to answer. It is still a step.
+		if not questions and task.kind != "Work":
 			continue
 		done = sum(1 for q in questions if q["answer"])
 		answered += done
@@ -1032,6 +1269,8 @@ def board(doc) -> dict:
 				"task": task.name,
 				"title": task.task_name,
 				"stage": task.stage or "Setup",
+				"kind": task.kind or "Questions",
+				"work_note": task.work_note,
 				"sequence": task.sequence or 0,
 				"icon": task.icon,
 				"doctype": task.target_doctype,
@@ -1040,9 +1279,13 @@ def board(doc) -> dict:
 				"questions": questions,
 				"answered": done,
 				"total": len(questions),
-				"state": _("Ready to apply")
-				if done == len(questions)
-				else (_("In progress") if done else _("Not started")),
+				"state": _("To do")
+				if task.kind == "Work"
+				else (
+					_("Ready to apply")
+					if done == len(questions)
+					else (_("In progress") if done else _("Not started"))
+				),
 			}
 		)
 

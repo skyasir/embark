@@ -8,6 +8,7 @@
   "task_name",
   "sequence",
   "stage",
+  "kind",
   "icon",
   "column_break_1",
   "target_doctype",
@@ -15,7 +16,8 @@
   "applies_when",
   "is_active",
   "section_1",
-  "description"
+  "description",
+  "work_note"
  ],
  "fields": [
   {
@@ -41,6 +43,15 @@
    "default": "Setup",
    "in_list_view": 1,
    "description": "Which of the three stages of onboarding this step belongs to: the company's own details, the choice of modules, or the setup questions those modules call for."
+  },
+  {
+   "fieldname": "kind",
+   "fieldtype": "Select",
+   "label": "Kind",
+   "options": "Questions\nWork",
+   "default": "Questions",
+   "in_list_view": 1,
+   "description": "Questions are answered and configure ERPNext. Work is done \u2014 bringing in opening balances, training people \u2014 and is ticked off, not answered."
   },
   {
    "fieldname": "icon",
@@ -87,11 +98,17 @@
    "fieldname": "description",
    "fieldtype": "Small Text",
    "label": "What this step is for"
+  },
+  {
+   "fieldname": "work_note",
+   "fieldtype": "Small Text",
+   "label": "What the work involves",
+   "description": "For a Work step: what has to be prepared or done, in the customer's words."
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-10-15 00:00:00.000000",
+ "modified": "2026-10-19 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Embark",
  "name": "Embark Wizard Task",

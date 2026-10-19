@@ -1701,3 +1701,57 @@ class TestChatDoesTheWork(TestCase):
 		groups = frappe.get_all("Account", filters={"is_group": 1}, pluck="name")
 		self.assertTrue(groups, "this site has no group accounts to check against")
 		self.assertEqual([a for a in offered if a in set(groups)], [])
+
+	def test_work_is_not_asked_as_a_question(self):
+		"""Opening balances are a job, not a yes-or-no."""
+		from embark import wizard
+
+		gone = {
+			"needs_opening_balances",
+			"opening_trial_balance",
+			"opening_receivables",
+			"opening_payables",
+			"user_count",
+			"parallel_run",
+			"key_users",
+			"needs_approvals",
+		}
+		live = set(frappe.get_all("Embark Wizard Question", filters={"is_active": 1}, pluck="name"))
+		self.assertEqual(gone & live, set(), "work is still being asked as questions")
+
+		board = wizard.board(frappe.get_doc("Embark Onboarding", self.onboarding.name))
+		work = [t for t in board["tasks"] if t["kind"] == "Work"]
+		self.assertTrue(work, "the work has to be listed somewhere")
+		for task in work:
+			self.assertEqual(task["questions"], [], f"{task['title']} is work and asks nothing")
+			self.assertTrue(task["work_note"], f"{task['title']} has to say what it involves")
+			self.assertEqual(task["state"], "To do")
+
+	def test_every_question_left_either_configures_or_decides(self):
+		"""A question that writes nothing and gates nothing is a question
+		nobody needed to be asked."""
+		import re
+
+		rows = frappe.get_all(
+			"Embark Wizard Question",
+			filters={"is_active": 1},
+			fields=["name", "task", "fieldname", "applies_when"],
+		)
+		tasks = frappe.get_all("Embark Wizard Task", filters={"is_active": 1}, fields=["applies_when"])
+		conditions = " ".join([r.applies_when or "" for r in rows] + [t.applies_when or "" for t in tasks])
+
+		# A date cannot be a condition in Embark's condition language — it says
+		# when the work happens, and the work step says so in words.
+		dates = set(
+			frappe.get_all(
+				"Embark Wizard Question", filters={"is_active": 1, "answer_type": "Date"}, pluck="name"
+			)
+		)
+		idle = [
+			r.name
+			for r in rows
+			if not r.fieldname
+			and r.name not in dates
+			and not re.search(r"\b%s\b" % re.escape(r.name), conditions)
+		]
+		self.assertEqual(idle, [], f"these configure nothing and decide nothing: {idle}")
