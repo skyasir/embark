@@ -177,3 +177,31 @@ def shape():
 	work = [t.name for t in tasks if t.kind == "Work"]
 	print(f"SHAPE {q} questions across {len(asked)} question steps, and {len(work)} work steps")
 	print("WORK " + " | ".join(work))
+
+
+def check_bank(path="_bank_v2_check.json"):
+	"""Does every question in a proposed bank point at something real?"""
+	import json
+	import pathlib
+
+	rows = json.loads((pathlib.Path(frappe.get_app_path("embark")) / "data" / path).read_text())
+	bad_dt, bad_field, bad_choice = [], [], []
+	for r in rows:
+		dt, fn = r["target_doctype"], r["fieldname"]
+		if not frappe.db.exists("DocType", dt):
+			bad_dt.append(f"{r['question_key']} -> {dt}")
+			continue
+		meta = frappe.get_meta(dt)
+		field = meta.get_field(fn) if fn else None
+		if fn and not field:
+			bad_field.append(f"{r['question_key']} -> {dt}.{fn}")
+			continue
+		if r["answer_type"] == "Select" and field and field.fieldtype == "Select" and field.options:
+			theirs = [o for o in (r["options"] or "").split("\n") if o]
+			real = [o for o in (field.options or "").split("\n") if o]
+			missing = [o for o in theirs if o not in real]
+			if missing:
+				bad_choice.append(f"{r['question_key']}: {missing} not in {real[:4]}")
+	print(f"BANKCHECK {len(rows)} questions | missing doctypes {len(bad_dt)} | missing fields {len(bad_field)} | bad choices {len(bad_choice)}")
+	for line in bad_dt + bad_field + bad_choice:
+		print("   ", line)

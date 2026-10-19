@@ -983,10 +983,16 @@ def authored() -> tuple[list[dict], list[dict]]:
 	tasks, questions, seen = [], [], {}
 	for row in rows:
 		module, task = row["module"], row["task"]
-		# A question about a record this site does not have is not seeded at
-		# all. HR Settings and Payroll Settings arrive with Frappe HR, so those
-		# questions appear on the migrate after it is installed, not before.
-		if row["target_doctype"] and not frappe.db.exists("DocType", row["target_doctype"]):
+		# A question about something this site does not have is not seeded at
+		# all. HR Settings arrives with Frappe HR, GST Settings and an
+		# address's GSTIN with India Compliance — so those questions appear on
+		# the migrate after the app is installed, and not before. The field
+		# matters as much as the doctype: an Address exists everywhere, but
+		# its GSTIN only exists where India Compliance put it.
+		target = row["target_doctype"]
+		if target and not frappe.db.exists("DocType", target):
+			continue
+		if target and row["fieldname"] and not frappe.get_meta(target).get_field(row["fieldname"]):
 			continue
 		if task not in seen:
 			seen[task] = True
