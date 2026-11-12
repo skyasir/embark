@@ -125,3 +125,21 @@ modified Embark as a service has to publish their changes.
 The one exception is `embark/vendor/flow`, which is Frappe Flow's agent engine
 carried in with its own copyright notices and `LICENSE.txt` beside it — theirs,
 not ours. See the note in that folder.
+
+<!-- portfolio:start -->
+---
+
+<p align="center">
+  <a href="https://yasirshaikh.in/?app=embark">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://yasirshaikh.in/files/yasir-logo-on-dark.svg">
+      <img src="https://yasirshaikh.in/files/yasir-logo.svg" alt="Yasir Shaikh" height="64">
+    </picture>
+  </a>
+</p>
+
+<p align="center">
+  Built by <a href="https://yasirshaikh.in/">Yasir Shaikh</a>, ERPNext consultant and Frappe developer.<br>
+  <a href="https://yasirshaikh.in/?app=embark">See this app on my portfolio</a>
+</p>
+<!-- portfolio:end -->
