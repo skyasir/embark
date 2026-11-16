@@ -10,6 +10,16 @@ It runs on the customer's own ERPNext site: you create the site with Embark
 installed and hand it over, usually before ERPNext's setup wizard has been run.
 One site, one onboarding.
 
+## Screenshots
+
+![Start the onboarding on the customer's own site](docs/screenshots/embark-start.png)
+*Start the onboarding on the customer's own site*
+
+![The setup plan Embark builds for that business](docs/screenshots/embark-setup.png)
+*The setup plan Embark builds for that business*
+
+Recorded on a demo site with made-up data.
+
 ### The customer's journey
 
 1. **Tell us about your business.** A short interview: what they use today, what
